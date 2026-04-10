@@ -5,7 +5,7 @@
 If you discover a security vulnerability, please report it responsibly.
 
 Contact:
-bug@arrow-x.org
+security@arrow-x.org
 
 Please include:
 - Description of the issue
