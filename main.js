@@ -33,6 +33,11 @@ let monitorInterval = null;
 let singboxStdErr = '';
 let singboxStdOut = '';
 
+// ==========================================
+// MAGIA STEALTH: Puerto base (mutará al conectar)
+// ==========================================
+let puertoStealthLocal = 10808;
+
 const configEnMemoriaInicial = {
     tray: true,
     autoConnect: false,
@@ -54,6 +59,7 @@ const rutaBinarios = app.isPackaged
 const singboxPath = path.join(rutaBinarios, 'sing-box.exe');
 const configJsonPath = path.join(app.getPath('userData'), 'config.json');
 const singboxLogPath = path.join(app.getPath('userData'), 'singbox_error.log');
+const appErrorLogPath = path.join(app.getPath('userData'), 'app_error.log');
 
 const API_BASE_URL = 'https://arrow-x.org:5000';
 
@@ -147,6 +153,56 @@ function mostrarAlertaDesconexion() {
     });
 }
 
+function registrarErrorApp(contexto, detalle) {
+    try {
+        const bloque = [
+            `\n[${new Date().toISOString()}] [${contexto}]`,
+            detalle || 'Sin detalle',
+            '------------------------------------------------------------'
+        ].join('\n');
+
+        fs.appendFileSync(appErrorLogPath, bloque, 'utf8');
+    } catch (e) {}
+}
+
+function resumirErrorParaUI(errorMsg, modo = 'vpn') {
+    const txt = String(errorMsg || '').toLowerCase();
+
+    if (txt.includes('timeout esperando puerto')) {
+        return modo === 'proxy'
+            ? 'Error del proxy local.'
+            : 'Error interno del motor VPN.';
+    }
+
+    if (txt.includes('adaptador tun')) {
+        return 'Error del adaptador VPN.';
+    }
+
+    if (txt.includes('dns')) {
+        return 'Error de resolución DNS.';
+    }
+
+    if (txt.includes('llave del nodo')) {
+        return 'Configuración del nodo inválida.';
+    }
+
+    if (txt.includes('suscripción')) {
+        return 'Error de suscripción.';
+    }
+
+    if (txt.includes('sing-box terminó inmediatamente')) {
+        return 'El motor VPN no pudo iniciarse.';
+    }
+
+    if (txt.includes('no se pudo lanzar sing-box') || txt.includes('error iniciando sing-box')) {
+        return 'Error del motor VPN.';
+    }
+
+    return modo === 'proxy'
+        ? 'No se pudo iniciar el proxy.'
+        : 'No se pudo iniciar la VPN.';
+}
+
 function refrescarProxyWindows() {
     try {
         const scriptPath = path.join(app.getPath('userData'), 'refresh_proxy.ps1');
@@ -190,7 +246,7 @@ function limpiarProxySistema() {
 function activarProxySistema() {
     try {
         const p = session.defaultSession.setProxy({
-            proxyRules: 'http=127.0.0.1:10808;https=127.0.0.1:10808'
+            proxyRules: `http=127.0.0.1:${puertoStealthLocal};https=127.0.0.1:${puertoStealthLocal}`
         });
         if (p && p.catch) p.catch(() => {});
     } catch (e) {}
@@ -220,7 +276,7 @@ function activarProxySistema() {
             '/t',
             'REG_SZ',
             '/d',
-            '127.0.0.1:10808',
+            `127.0.0.1:${puertoStealthLocal}`,
             '/f'
         ], { windowsHide: true });
     } catch (e) {}
@@ -505,16 +561,21 @@ function iniciarMonitorSingbox() {
                 }
 
                 const detalle = leerLogSingbox() || singboxStdErr || 'El motor VPN se detuvo.';
+                registrarErrorApp('monitor-singbox', detalle);
+
                 if (mainWindow && !mainWindow.isDestroyed()) {
+                    const msgBase = resumirErrorParaUI('sing-box terminó inmediatamente', configEnMemoria.connectionMode);
                     mainWindow.webContents.send(
                         'error-suscripcion',
                         configEnMemoria.killSwitch
-                            ? `Conexión perdida. Red bloqueada.\n${detalle}`
-                            : detalle
+                            ? `Conexión perdida. Red bloqueada. ${msgBase}`
+                            : `Conexión perdida. ${msgBase}`
                     );
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            registrarErrorApp('monitor-singbox-exception', e.message || String(e));
+        }
     }, 3000);
 }
 
@@ -648,11 +709,13 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
             fs.writeFileSync(singboxLogPath, '');
         } catch (err) {}
 
+        puertoStealthLocal = Math.floor(Math.random() * (60000 - 10000 + 1)) + 10000;
+
         const proxyOutbound = {
             type: "vless",
             tag: "proxy",
             server: nodeIP,
-            server_port: parseInt(url.port || '443', 10),
+            server_port: parseInt(url.port || "443", 10),
             uuid: url.username
         };
 
@@ -674,7 +737,7 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
             const alpn = params.get("alpn");
             if (alpn) {
                 proxyOutbound.tls.alpn = alpn
-                    .split(',')
+                    .split(",")
                     .map(v => v.trim())
                     .filter(Boolean);
             }
@@ -698,9 +761,13 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
             };
         } else if (transportType === "grpc") {
             proxyOutbound.transport = {
-                type: "grpc",
-                service_name: params.get("serviceName") || params.get("service_name") || ""
+                type: "grpc"
             };
+
+            const serviceName = params.get("serviceName") || params.get("service_name");
+            if (serviceName) {
+                proxyOutbound.transport.service_name = serviceName;
+            }
         } else if (transportType === "httpupgrade") {
             proxyOutbound.transport = {
                 type: "httpupgrade",
@@ -709,7 +776,7 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
             };
         }
 
-        const nodeCIDR = nodeIP.includes(':') ? `${nodeIP}/128` : `${nodeIP}/32`;
+        const nodeCIDR = nodeIP.includes(":") ? `${nodeIP}/128` : `${nodeIP}/32`;
 
         const config = {
             log: {
@@ -729,8 +796,7 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
                         server: "1.1.1.1",
                         server_port: 443,
                         path: "/dns-query",
-                        detour: "proxy",
-                        domain_resolver: "dns-local"
+                        detour: "proxy"
                     },
                     {
                         type: "https",
@@ -738,8 +804,7 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
                         server: "2606:4700:4700::1111",
                         server_port: 443,
                         path: "/dns-query",
-                        detour: "proxy",
-                        domain_resolver: "dns-local"
+                        detour: "proxy"
                     }
                 ],
                 final: "dns-remote-v4"
@@ -747,14 +812,15 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
             inbounds: [],
             outbounds: [
                 proxyOutbound,
-                { type: "direct", tag: "direct" }
+                {
+                    type: "direct",
+                    tag: "direct"
+                }
             ],
             route: {
                 auto_detect_interface: true,
                 final: "proxy",
-                default_domain_resolver: {
-                    server: "dns-local"
-                },
+                default_domain_resolver: "dns-local",
                 rules: [
                     {
                         ip_cidr: [
@@ -777,28 +843,27 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
                         ip_cidr: [nodeCIDR],
                         action: "route",
                         outbound: "direct"
+                    },
+                    {
+                        domain_suffix: ["ru", "su", "xn--p1ai"],
+                        action: "route",
+                        outbound: "direct"
                     }
                 ]
             }
         };
 
-        if (configEnMemoria.connectionMode === 'proxy') {
+        if (configEnMemoria.connectionMode === "proxy") {
             config.inbounds = [
                 {
                     type: "mixed",
                     tag: "mixed-in",
                     listen: "127.0.0.1",
-                    listen_port: 10808
+                    listen_port: puertoStealthLocal
                 }
             ];
         } else {
             config.inbounds = [
-                {
-                    type: "mixed",
-                    tag: "mixed-in",
-                    listen: "127.0.0.1",
-                    listen_port: 10808
-                },
                 {
                     type: "tun",
                     tag: "tun-in",
@@ -818,7 +883,8 @@ function generarConfigSingbox(vlessUrl, nodeIP) {
         fs.writeFileSync(configJsonPath, JSON.stringify(config, null, 4));
         return true;
     } catch (e) {
-        console.log('Error generando config sing-box:', e.message);
+        console.log("Error generando config sing-box:", e.message);
+        registrarErrorApp('generar-config-singbox', e.stack || e.message || String(e));
         return false;
     }
 }
@@ -835,60 +901,62 @@ ipcMain.on('conectar-vpn', async (event, payload) => {
         try {
             vlessUrlObj = new URL(vlessKey);
         } catch (e) {
-            return event.reply('error-suscripcion', "Formato de llave inválido en el nodo");
+            return event.reply('error-suscripcion', "Llave del nodo inválida.");
         }
 
         const nodeIP = await resolverIP(vlessUrlObj.hostname);
         if (!nodeIP) {
-            return event.reply('error-suscripcion', "Servidor inaccesible (Falló DNS)");
+            return event.reply('error-suscripcion', "Servidor inaccesible.");
         }
 
         const status = await verificarSuscripcionReal(configEnMemoria.uuid);
         if (!status.valido) {
-            return event.reply('error-suscripcion', status.msg);
+            return event.reply('error-suscripcion', status.msg || "Suscripción inválida.");
         }
 
         if (!generarConfigSingbox(vlessKey, nodeIP)) {
-            return event.reply('error-suscripcion', "Error en la configuración local");
+            return event.reply('error-suscripcion', "Error de configuración local.");
         }
 
-        if (configEnMemoria.connectionMode === 'proxy') {
-            activarProxySistema();
-        } else {
-            limpiarProxySistema();
+        // Limpieza previa por si quedó algo de una sesión anterior
+        limpiarProxySistema();
+
+        if (configEnMemoria.connectionMode === 'vpn') {
             try { spawn('ipconfig', ['/flushdns'], { windowsHide: true }); } catch (e) {}
         }
 
         await iniciarSingbox(configJsonPath);
-        await esperarPuerto('127.0.0.1', 10808, 8000);
 
-        isVpnConnected = true;
-
-        if (configEnMemoria.connectionMode === 'vpn') {
+        if (configEnMemoria.connectionMode === 'proxy') {
+            await esperarPuerto('127.0.0.1', puertoStealthLocal, 8000);
+            activarProxySistema();
+        } else {
             const interfazLista = await esperarInterfazTun('ArrowTUN', 12000);
+            if (!interfazLista) {
+                throw new Error('El adaptador TUN no apareció a tiempo.');
+            }
 
-            if (interfazLista) {
-                try {
-                    const psNetworkScriptPath = path.join(app.getPath('userData'), 'network_setup.ps1');
-                    const psNetworkCommands = `
-                        netsh interface ip set address "ArrowTUN" static 172.19.0.2 255.255.255.0 172.19.0.1
-                        netsh interface ip set dns "ArrowTUN" static 1.1.1.1 validate=no
-                        netsh interface ipv6 set dnsservers "ArrowTUN" static 2606:4700:4700::1111 validate=no
-                        netsh interface ipv4 set interface "ArrowTUN" metric=1
-                        netsh interface ipv6 set interface "ArrowTUN" metric=1
-                        Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object {$_.Comment -eq 'ArrowVPN'} | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue
-                        Add-DnsClientNrptRule -Namespace '.' -NameServers '1.1.1.1','2606:4700:4700::1111' -Comment 'ArrowVPN' -ErrorAction SilentlyContinue
-                        Clear-DnsClientCache
-                        ipconfig /flushdns
-                    `;
-                    fs.writeFileSync(psNetworkScriptPath, psNetworkCommands);
-                    spawn('powershell.exe', ['-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', psNetworkScriptPath], { windowsHide: true });
-                } catch (e) {}
-            } else {
-                console.log('ArrowTUN no apareció a tiempo.');
+            try {
+                const psNetworkScriptPath = path.join(app.getPath('userData'), 'network_setup.ps1');
+                const psNetworkCommands = `
+                    netsh interface ip set address "ArrowTUN" static 172.19.0.2 255.255.255.0 172.19.0.1
+                    netsh interface ip set dns "ArrowTUN" static 1.1.1.1 validate=no
+                    netsh interface ipv6 set dnsservers "ArrowTUN" static 2606:4700:4700::1111 validate=no
+                    netsh interface ipv4 set interface "ArrowTUN" metric=1
+                    netsh interface ipv6 set interface "ArrowTUN" metric=1
+                    Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object {$_.Comment -eq 'ArrowVPN'} | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue
+                    Add-DnsClientNrptRule -Namespace '.' -NameServers '1.1.1.1','2606:4700:4700::1111' -Comment 'ArrowVPN' -ErrorAction SilentlyContinue
+                    Clear-DnsClientCache
+                    ipconfig /flushdns
+                `;
+                fs.writeFileSync(psNetworkScriptPath, psNetworkCommands);
+                spawn('powershell.exe', ['-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', psNetworkScriptPath], { windowsHide: true });
+            } catch (e) {
+                registrarErrorApp('network-setup-ps1', e.stack || e.message || String(e));
             }
         }
 
+        isVpnConnected = true;
         iniciarMonitorSingbox();
         event.reply('vpn-conectada-exito');
 
@@ -897,9 +965,10 @@ ipcMain.on('conectar-vpn', async (event, payload) => {
 
         isVpnConnected = false;
         await detenerSingbox();
+        limpiarProxySistema();
 
-        if (configEnMemoria.connectionMode === 'proxy') {
-            limpiarProxySistema();
+        if (configEnMemoria.connectionMode === 'vpn') {
+            limpiarReglasFirewall();
         }
 
         const detalle = [
@@ -908,9 +977,11 @@ ipcMain.on('conectar-vpn', async (event, payload) => {
             leerLogSingbox()
         ].filter(Boolean).join('\n');
 
+        registrarErrorApp('conectar-vpn', detalle);
+
         event.reply(
             'error-suscripcion',
-            detalle || "Error interno al iniciar proxy."
+            resumirErrorParaUI(e.message, configEnMemoria.connectionMode)
         );
     }
 });
@@ -1024,6 +1095,7 @@ autoUpdater.on('update-downloaded', () => {
 
 autoUpdater.on('error', (err) => {
     console.log('Error silencioso en OTA:', err.message);
+    registrarErrorApp('auto-updater', err.stack || err.message || String(err));
 });
 
 function limpiarAccesosDirectosFantasma() {
@@ -1040,6 +1112,7 @@ function limpiarAccesosDirectosFantasma() {
         }
     } catch (e) {
         console.log("Error limpiando accesos directos:", e.message);
+        registrarErrorApp('limpiar-accesos-directos', e.stack || e.message || String(e));
     }
 }
 
@@ -1048,7 +1121,9 @@ app.whenReady().then(async () => {
 
     try {
         await detenerSingbox();
-    } catch (e) {}
+    } catch (e) {
+        registrarErrorApp('startup-detener-singbox', e.stack || e.message || String(e));
+    }
 
     limpiarProxySistema();
     limpiarReglasFirewall();
@@ -1061,6 +1136,7 @@ app.whenReady().then(async () => {
             await autoUpdater.checkForUpdatesAndNotify();
         } catch (err) {
             console.log('Fallo al iniciar el servicio OTA:', err.message);
+            registrarErrorApp('startup-ota', err.stack || err.message || String(err));
         }
     }, 3000);
 });
