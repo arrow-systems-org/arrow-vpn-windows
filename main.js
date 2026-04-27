@@ -46,7 +46,8 @@ const configEnMemoriaInicial = {
     uuid: '',
     password: '',
     servidores: {},
-    ultimoServidor: ''
+    ultimoServidor: '',
+    idioma: 'es'
 };
 
 let configEnMemoria = { ...configEnMemoriaInicial };
@@ -101,7 +102,8 @@ function getSettings() {
         tray: (saved.tray === false || saved.tray === 'false') ? false : true,
         autoConnect: (saved.autoConnect === true || saved.autoConnect === 'true'),
         killSwitch: (saved.killSwitch === true || saved.killSwitch === 'true'),
-        connectionMode: saved.connectionMode || 'vpn'
+        connectionMode: saved.connectionMode || 'vpn',
+        idioma: saved.idioma || 'es'
     };
 }
 
