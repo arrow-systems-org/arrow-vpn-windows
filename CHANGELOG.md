@@ -6,7 +6,80 @@ This project follows a structured release format to track improvements, fixes, a
 
 ---
 
-## [v2.0.14] - 2026-04-11 
+## Arrow VPN v2.0.16
+
+This release introduces full internationalization support, featuring a dynamic UI translation engine and seamless multilingual server localization, along with important UI refinements and under-the-hood framework updates.
+
+---
+
+### ✨ Highlights
+
+* Full English and Spanish UI support with instant switching
+* Dynamic server name translation using native OS APIs (`Intl.DisplayNames`)
+* Premium glassmorphism language selector
+* Improved floating panel layouts for better screen adaptability
+* Core framework security update
+
+---
+
+### Improvements
+
+* Implemented a completely new i18n system allowing users to switch interface languages instantly without restarting the application.
+* Server names are now dynamically translated and sorted alphabetically based on the user's selected language, utilizing backend-provided ISO country codes.
+* Redesigned the settings panel: replaced the native Windows OS dropdown with a custom, animated glassmorphism select menu to match the premium dark theme.
+* Optimized the floating panels' layout (adjusted padding and added max-height constraints) to perfectly fit screens without overlapping the top title bar.
+* Updated the core `electron` framework to v40.9.2 for enhanced security and stability, while carefully maintaining CommonJS compatibility.
+
+---
+
+### Fixes
+
+* Fixed an aesthetic issue where the settings and support panels could touch or overflow the top window edge on certain scaling configurations.
+* Fixed the display of long server names by ensuring proper text capitalization and UI spacing.
+
+---
+
+## Русская версия
+## Arrow VPN v2.0.16
+
+Этот релиз добавляет полную поддержку интернационализации, представляя движок динамического перевода пользовательского интерфейса и локализации серверов, а также важные визуальные улучшения и обновление базового фреймворка.
+
+---
+
+### ✨ Основные особенности
+
+* Полная поддержка английского и испанского интерфейса с мгновенным переключением
+* Динамический перевод названий серверов с использованием нативных API ОС (`Intl.DisplayNames`)
+* Премиальный селектор языка в стиле glassmorphism
+* Улучшенная компоновка плавающих панелей для лучшей адаптивности экрана
+* Обновление безопасности базового фреймворка
+
+---
+
+### Улучшения
+
+* Внедрена совершенно новая система i18n, позволяющая мгновенно переключать язык интерфейса без перезапуска приложения.
+* Названия серверов теперь переводятся динамически и сортируются по алфавиту в зависимости от выбранного пользователем языка с использованием ISO-кодов стран, предоставляемых бэкендом.
+* Переработана панель настроек: стандартный выпадающий список Windows заменен на кастомное анимированное меню в стиле glassmorphism, соответствующее темной премиальной теме.
+* Оптимизирована компоновка плавающих панелей (скорректированы отступы и добавлено ограничение по максимальной высоте), чтобы они идеально помещались на экране, не перекрывая верхнюю строку заголовка.
+* Базовый фреймворк `electron` обновлен до версии 40.9.2 для повышения безопасности и стабильности (с сохранением совместимости CommonJS).
+
+---
+
+### Исправления
+
+* Исправлена эстетическая проблема, из-за которой панели настроек и поддержки могли касаться верхнего края окна или выходить за его пределы при определенных масштабах экрана.
+* Исправлено отображение длинных названий серверов: обеспечена правильная капитализация текста и интервалы в интерфейсе.
+
+---
+
+## Arrow VPN v2.0.15
+
+Fixes and improvements
+
+---
+
+## Arrow VPN v2.0.14
 
 This release focuses on desktop security hardening, routing refinements, and startup reliability improvements.
 
@@ -59,7 +132,7 @@ Special thanks to @runetfreedom for publicly documenting and drawing attention t
 * * *
 
 ## Русская версия
-## [v2.0.14] - 2026-04-11
+## Arrow VPN v2.0.14
 
 Этот релиз посвящён усилению безопасности настольного клиента, улучшению маршрутизации и повышению надёжности запуска.
 
