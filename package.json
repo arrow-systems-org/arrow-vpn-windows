@@ -1,6 +1,6 @@
 {
   "name": "arrow-vpn",
-  "version": "2.0.13",
+  "version": "2.0.16",
   "description": "Privacy-focused VPN client for Windows powered by sing-box",
   "main": "main.js",
   "type": "commonjs",
