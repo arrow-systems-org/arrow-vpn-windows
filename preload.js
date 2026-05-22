@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld('apiVPN', {
         }
     },
     recibir: (canal, funcion) => {
-        const canalesValidos = ['load-settings', 'vpn-conectada-exito', 'error-suscripcion', 'app-version', 'login-success', 'login-error', 'update-status', 'ping-results'];
+        const canalesValidos = ['load-settings', 'vpn-conectada-exito', 'error-suscripcion', 'app-version', 'login-success', 'login-error', 'update-status', 'ping-results', 'app-toast'];
         if (canalesValidos.includes(canal)) {
             ipcRenderer.on(canal, (event, ...args) => funcion(...args));
         }

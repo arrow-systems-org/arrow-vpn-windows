@@ -18,6 +18,21 @@
     </div>
 
     <div id="pantalla-login" class="pantalla-login">
+        <div class="login-lang-selector">
+            <div class="custom-select compact" id="custom-idioma-select-login">
+                <div class="select-trigger">
+                    <span id="select-trigger-text-login">Español</span>
+                    <span class="arrow">▼</span>
+                </div>
+
+                <div class="select-options">
+                    <div class="option selected" data-value="es">Español</div>
+                    <div class="option" data-value="en">English</div>
+                    <div class="option" data-value="ru">Русский</div>
+                </div>
+            </div>
+        </div>
+
         <div class="login-box">
             <h2>Arrow VPN</h2>
             <p data-i18n="login-sub">Ingresa tus credenciales Stealth</p>
@@ -36,7 +51,7 @@
 
     <div class="mode-selector">
         <button class="mode-btn active" id="btn-modo-vpn">VPN</button>
-        <button class="mode-btn" id="btn-modo-proxy" title="Ideal para redes bloqueadas o Wi-Fi público estricto">PROXY</button>
+        <button class="mode-btn" id="btn-modo-proxy" data-i18n-title="proxy-tooltip" title="Ideal para redes bloqueadas o Wi-Fi público estricto">PROXY</button>
     </div>
 
     <div class="status-text" id="main-status-text" data-i18n="status-inactivo">Protección Inactiva</div>
@@ -108,6 +123,7 @@
                     <div class="select-options">
                         <div class="option selected" data-value="es">Español</div>
                         <div class="option" data-value="en">English</div>
+                        <div class="option" data-value="ru">Русский</div>
                     </div>
                 </div>
             </div>
@@ -222,7 +238,17 @@
             "msg-desconectado": "Desconectado",
             "msg-conexion-establecida": "✓ Conexión establecida",
             "msg-verificando": "Verificando...",
-            "msg-autenticando": "Autenticando..."
+            "msg-autenticando": "Autenticando...",
+
+            "msg-disconnect-mode": "Desconéctate para cambiar de modo",
+            "msg-disconnect-server": "Desconéctate para cambiar de servidor",
+            "live-latency": "Latencia en vivo",
+            "offline": "Fuera de servicio",
+            "login-all-data": "Ingresa todos los datos",
+            "copy-link": "Copiar Enlace",
+            "msg-vless-copied": "✓ VLESS de {name} copiado",
+            "country-us-short": "EE. UU.",
+            "proxy-tooltip": "Ideal para redes bloqueadas o Wi-Fi público estricto"
         },
 
         en: {
@@ -276,14 +302,96 @@
             "msg-desconectado": "Disconnected",
             "msg-conexion-establecida": "✓ Connection established",
             "msg-verificando": "Verifying...",
-            "msg-autenticando": "Authenticating..."
+            "msg-autenticando": "Authenticating...",
+
+            "msg-disconnect-mode": "Disconnect to switch modes",
+            "msg-disconnect-server": "Disconnect to change servers",
+            "live-latency": "Live Latency",
+            "offline": "Offline",
+            "login-all-data": "Enter all data",
+            "copy-link": "Copy Link",
+            "msg-vless-copied": "✓ {name} VLESS copied",
+            "country-us-short": "USA",
+            "proxy-tooltip": "Ideal for blocked networks or strict public Wi-Fi"
+        },
+
+        ru: {
+            "login-sub": "Введите ваши Stealth-данные",
+            "login-uuid-ph": "ID пользователя (UUID)",
+            "login-pass-ph": "Пароль",
+            "btn-login": "Проверить доступ",
+
+            "status-inactivo": "Защита неактивна",
+            "status-iniciando-tun": "Запуск режима TUN...",
+            "status-iniciando-proxy": "Запуск режима прокси...",
+            "status-deteniendo": "Остановка служб...",
+
+            "btn-conectar": "ПОДКЛЮЧИТЬСЯ",
+            "btn-desconectar": "ОТКЛЮЧИТЬСЯ",
+
+            "ubi-actual": "Текущее местоположение",
+            "cargando-nodos": "Загрузка узлов...",
+
+            "panel-soporte-tit": "Техническая поддержка",
+            "lbl-version": "Версия приложения",
+            "lbl-sesion": "ID Session Messenger",
+            "lbl-centro": "Центр помощи",
+            "btn-cerrar": "Закрыть",
+
+            "panel-ajustes-tit": "Настройки",
+            "btn-cred": "Мои данные",
+            "btn-logout": "Выйти",
+            "lbl-gen": "Общие",
+            "lbl-idioma": "Язык / Language",
+            "lbl-tray": "Сворачивать в трей",
+            "lbl-auto": "Автоподключение",
+            "lbl-sec": "Расширенная безопасность",
+            "lbl-kill": "Kill Switch (Блокировка)",
+            "btn-volver": "Назад",
+
+            "panel-cred-tit": "Мои данные",
+            "cred-sub": "Нажмите, чтобы скопировать в буфер обмена",
+            "btn-copiar-sub": "Скопировать общую подписку",
+            "lbl-nodos-ind": "Узлы VLESS (по отдельности)",
+            "btn-volver-ajustes": "Назад к настройкам",
+
+            "msg-ajustes": "✓ Настройки обновлены",
+            "msg-copiado": "✓ Скопировано в буфер обмена",
+            "msg-error-nodo": "⚠️ Ошибка: сервер не выбран",
+            "msg-vpn-activa": "VPN активна",
+            "msg-proxy-activo": "Прокси активен",
+            "msg-conectando": "ПОДКЛЮЧЕНИЕ...",
+            "msg-apagando": "ОТКЛЮЧЕНИЕ...",
+            "msg-sesion-iniciada": "✓ Вход выполнен",
+            "msg-desconectado": "Отключено",
+            "msg-conexion-establecida": "✓ Соединение установлено",
+            "msg-verificando": "Проверка...",
+            "msg-autenticando": "Аутентификация...",
+
+            "msg-disconnect-mode": "Отключитесь, чтобы сменить режим",
+            "msg-disconnect-server": "Отключитесь, чтобы сменить сервер",
+            "live-latency": "Задержка в реальном времени",
+            "offline": "Недоступен",
+            "login-all-data": "Введите все данные",
+            "copy-link": "Скопировать ссылку",
+            "msg-vless-copied": "✓ VLESS {name} скопирован",
+            "country-us-short": "США",
+            "proxy-tooltip": "Подходит для заблокированных сетей или строгого публичного Wi-Fi"
         }
     };
 
     let currentLangValue = 'es';
 
-    function t(key) {
-        return i18n[currentLangValue]?.[key] || i18n.es[key] || key;
+    function t(key, params) {
+        let str = (i18n[currentLangValue] && i18n[currentLangValue][key]) || i18n.es[key] || key;
+
+        if (params) {
+            Object.keys(params).forEach(k => {
+                str = str.split('{' + k + '}').join(params[k]);
+            });
+        }
+
+        return str;
     }
 
     // ==========================================
@@ -299,7 +407,7 @@
             let nombreTraducido = traductor.of(codigoIso.toUpperCase());
 
             if (codigoIso.toUpperCase() === 'US') {
-                return currentLangValue === 'es' ? 'EE. UU.' : 'USA';
+                return t('country-us-short');
             }
 
             return nombreTraducido.charAt(0).toUpperCase() + nombreTraducido.slice(1);
@@ -316,6 +424,7 @@
 
     function cambiarIdiomaUI(lang) {
         currentLangValue = lang;
+        document.documentElement.lang = lang;
         const textos = i18n[lang];
 
         document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -327,6 +436,13 @@
                 } else {
                     el.innerText = textos[key];
                 }
+            }
+        });
+
+        document.querySelectorAll('[data-i18n-title]').forEach(el => {
+            const key = el.getAttribute('data-i18n-title');
+            if (textos[key]) {
+                el.title = textos[key];
             }
         });
 
@@ -393,39 +509,86 @@
     // ==========================================
     // LÓGICA DEL CUSTOM SELECT
     // ==========================================
-    const customSelect = document.getElementById('custom-idioma-select');
-    const trigger = customSelect.querySelector('.select-trigger');
-    const triggerText = document.getElementById('select-trigger-text');
-    const options = customSelect.querySelectorAll('.option');
+    // ==========================================
+    // SELECTOR DE IDIOMA (login + ajustes)
+    // ==========================================
+    // Ambos selectores comparten estado: cambiar uno actualiza el otro
+    // y persiste la elección. La lista permite registrar N selectores
+    // sin duplicar lógica.
+    // ==========================================
+    const selectoresIdioma = [
+        {
+            container: document.getElementById('custom-idioma-select'),
+            triggerText: document.getElementById('select-trigger-text'),
+            esAjustes: true
+        },
+        {
+            container: document.getElementById('custom-idioma-select-login'),
+            triggerText: document.getElementById('select-trigger-text-login'),
+            esAjustes: false
+        }
+    ];
 
-    trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        customSelect.classList.toggle('open');
-    });
+    function sincronizarSelectoresIdioma(lang) {
+        selectoresIdioma.forEach(sel => {
+            if (!sel.container) return;
 
-    options.forEach(opt => {
-        opt.addEventListener('click', () => {
-            const val = opt.getAttribute('data-value');
-            const txt = opt.innerText;
+            const opciones = sel.container.querySelectorAll('.option');
+            opciones.forEach(opt => {
+                const esActual = opt.getAttribute('data-value') === lang;
+                opt.classList.toggle('selected', esActual);
 
-            triggerText.innerText = txt;
+                if (esActual) {
+                    sel.triggerText.innerText = opt.innerText;
+                }
+            });
+        });
+    }
 
-            options.forEach(o => o.classList.remove('selected'));
-            opt.classList.add('selected');
+    selectoresIdioma.forEach(sel => {
+        if (!sel.container) return;
 
-            customSelect.classList.remove('open');
+        const trigger = sel.container.querySelector('.select-trigger');
+        const opciones = sel.container.querySelectorAll('.option');
 
-            if (currentLangValue !== val) {
-                cambiarIdiomaUI(val);
-                aplicarGuardado(true);
-            }
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // Cerrar otros selectores antes de abrir éste
+            selectoresIdioma.forEach(otro => {
+                if (otro !== sel && otro.container) {
+                    otro.container.classList.remove('open');
+                }
+            });
+
+            sel.container.classList.toggle('open');
+        });
+
+        opciones.forEach(opt => {
+            opt.addEventListener('click', () => {
+                const val = opt.getAttribute('data-value');
+
+                sel.container.classList.remove('open');
+
+                if (currentLangValue !== val) {
+                    cambiarIdiomaUI(val);
+                    sincronizarSelectoresIdioma(val);
+
+                    // Si el cambio vino del selector de ajustes,
+                    // mostramos el toast de confirmación.
+                    // Si vino del login, solo persistimos en silencio.
+                    aplicarGuardado(sel.esAjustes);
+                }
+            });
         });
     });
 
     document.addEventListener('click', (e) => {
-        if (!customSelect.contains(e.target)) {
-            customSelect.classList.remove('open');
-        }
+        selectoresIdioma.forEach(sel => {
+            if (sel.container && !sel.container.contains(e.target)) {
+                sel.container.classList.remove('open');
+            }
+        });
     });
 
     function aplicarGuardado(mostrarAviso = true) {
@@ -444,12 +607,7 @@
 
     function actualizarModoVisual(modo, guardar = true) {
         if (estaConectado || estaConectando) {
-            mostrarMensaje(
-                "⚠️ " + (currentLangValue === 'es'
-                    ? "Desconéctate para cambiar de modo"
-                    : "Disconnect to switch modes"),
-                true
-            );
+            mostrarMensaje("⚠️ " + t('msg-disconnect-mode'), true);
             return;
         }
 
@@ -487,7 +645,7 @@
 
     function renderizarMenuServidores() {
         const claseSpin = isPinging ? 'spin-anim' : '';
-        const txtLatencia = currentLangValue === 'es' ? "Latencia en vivo" : "Live Latency";
+        const txtLatencia = t('live-latency');
 
         menuServidores.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding: 4px 5px 0 5px;">
@@ -534,10 +692,10 @@
             } else if (
                 telemetria.ping > 800 ||
                 telemetria.ping === -1 ||
-                ["Caído", "Error URL", "Timeout"].includes(telemetria.estado)
+                ["down", "url_error", "timeout"].includes(telemetria.estado)
             ) {
                 claseColor = 'dot-apagado';
-                textoPing = currentLangValue === 'es' ? "Fuera de servicio" : "Offline";
+                textoPing = t('offline');
                 estaDeshabilitado = true;
             }
 
@@ -614,12 +772,7 @@
 
     btnAbrirServidores.addEventListener('click', () => {
         if (estaConectado || estaConectando) {
-            mostrarMensaje(
-                "⚠️ " + (currentLangValue === 'es'
-                    ? "Desconéctate para cambiar de servidor"
-                    : "Disconnect to change servers"),
-                true
-            );
+            mostrarMensaje("⚠️ " + t('msg-disconnect-server'), true);
             return;
         }
 
@@ -641,7 +794,7 @@
         const pass = inputPass.value.trim();
 
         if (!uuid || !pass) {
-            txtErrorLogin.innerText = currentLangValue === 'es' ? "Ingresa todos los datos" : "Enter all data";
+            txtErrorLogin.innerText = t('login-all-data');
             return;
         }
 
@@ -707,6 +860,10 @@
         mostrarMensaje(msg);
     });
 
+    window.apiVPN.recibir('app-toast', (msg) => {
+        mostrarMensaje(msg);
+    });
+
     window.apiVPN.recibir('load-settings', (settings) => {
         toggleTray.checked = settings.tray;
         toggleAuto.checked = settings.autoConnect;
@@ -714,16 +871,8 @@
 
         if (settings.idioma) {
             currentLangValue = settings.idioma;
-
-            const opt = Array.from(options).find(o => o.getAttribute('data-value') === settings.idioma);
-
-            if (opt) {
-                triggerText.innerText = opt.innerText;
-                options.forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-            }
-
             cambiarIdiomaUI(settings.idioma);
+            sincronizarSelectoresIdioma(settings.idioma);
         }
 
         actualizarModoVisual(settings.connectionMode || 'vpn', false);
@@ -898,7 +1047,7 @@
         const contenedor = document.getElementById('lista-vless-nodos');
         contenedor.innerHTML = '';
 
-        const txtCopiar = currentLangValue === 'es' ? "Copiar Enlace" : "Copy Link";
+        const txtCopiar = t('copy-link');
 
         for (const idPais in servidoresDisponibles) {
             const data = servidoresDisponibles[idPais];
@@ -919,11 +1068,7 @@
 
             div.addEventListener('click', () => {
                 navigator.clipboard.writeText(data.vless).then(() => {
-                    const msg = currentLangValue === 'es'
-                        ? "✓ VLESS de " + nombreTraducido + " copiado"
-                        : "✓ " + nombreTraducido + " VLESS copied";
-
-                    mostrarMensaje(msg);
+                    mostrarMensaje(t('msg-vless-copied', { name: nombreTraducido }));
                 });
             });
 

@@ -6,6 +6,99 @@ This project follows a structured release format to track improvements, fixes, a
 
 ---
 
+## Arrow VPN v2.0.19
+
+This release completes the internationalization effort by extending translation coverage to the main process layer (tray menu, system dialogs, IPC error messages) and adds full **Russian** language support. It also introduces single-instance enforcement with safe handling across OTA updates.
+
+---
+
+### ✨ Highlights
+
+* Full Russian (Русский) UI and system-level translations
+* Complete i18n coverage in the main process: tray menu, OTA dialogs, IPC error messages
+* Single-instance enforcement with automatic window focus and user notification on duplicate launch attempts
+* Safe OTA relaunch handling to prevent edge cases during version transitions
+* Live tray menu rebuild on language change without restart
+
+---
+
+### Improvements
+
+* Added a third UI language: **Russian (Русский)**, with full coverage across UI strings and system-level messages.
+* Implemented a complete i18n layer in the main process: tray menu, update dialogs, OS notifications, IPC error messages, and connection state messages now all follow the selected language.
+* The tray menu is now rebuilt live when the user changes language, eliminating the need to restart the app for the change to take effect on system-level UI.
+* Refactored ping radar state codes from localized strings to stable internal identifiers (`optimal`, `high_latency`, `overloaded`, `down`, `timeout`, `url_error`), decoupling backend logic from UI language and enabling reliable state comparison regardless of locale.
+* The `<html lang>` attribute now updates dynamically alongside the UI language for proper accessibility behavior and consistent `Intl.DisplayNames` country resolution.
+* Extended `data-i18n-title` attribute support to allow translation of HTML tooltip attributes (e.g. the PROXY mode hint).
+* Country name display overrides (US → USA / EE. UU. / США) are now fully language-aware via the i18n dictionary.
+* Extended the translation function with parameter interpolation support for dynamic strings (e.g. server names embedded in clipboard confirmation toasts).
+
+---
+
+### Fixes
+
+* Fixed the tray menu remaining in Spanish regardless of the selected UI language.
+* Fixed the OTA update dialog appearing in Spanish regardless of the selected UI language.
+* Fixed engine error messages, login errors, and subscription validation errors appearing in Spanish when using the English UI.
+* Fixed connection-loss notifications (including kill-switch warnings) not respecting the selected language.
+
+---
+
+### ⚠️ Notes
+
+* Only one instance of Arrow VPN can run at a time. Attempting to launch a second instance now focuses the existing window and displays a localized notification, instead of opening a duplicate window.
+* During OTA "Install and Restart", the single-instance lock is now explicitly released before relaunch, preventing edge cases where the newly installed version could fail to start due to a stale lock from the previous process.
+* Server-side messages received from the API (e.g. invalid credentials, inactive subscription) are still rendered using the text returned by the backend. Localization of these specific messages will be addressed in a future server-side update.
+
+---
+
+## Русская версия
+## Arrow VPN v2.0.19
+
+Этот релиз завершает работу по интернационализации, распространяя поддержку перевода на основной процесс приложения (меню в системном трее, системные диалоги, сообщения об ошибках IPC), и добавляет полную поддержку **русского** языка. Также внедрено обеспечение запуска единственного экземпляра приложения с корректной обработкой во время OTA-обновлений.
+
+---
+
+### ✨ Основные особенности
+
+* Полная поддержка русского (Русский) интерфейса и системных сообщений
+* Полный охват i18n в основном процессе: меню в трее, диалоги OTA, сообщения об ошибках IPC
+* Контроль единственного экземпляра приложения с автоматическим фокусом окна и уведомлением пользователя при попытке повторного запуска
+* Безопасная обработка перезапуска OTA для предотвращения сбоев при переходе между версиями
+* Динамическое обновление меню в трее при смене языка без перезапуска
+
+---
+
+### Улучшения
+
+* Добавлен третий язык интерфейса: **русский (Русский)**, с полным охватом строк UI и системных сообщений.
+* Реализован полноценный слой i18n в основном процессе: меню в трее, диалоги обновления, системные уведомления, сообщения об ошибках IPC и сообщения о состоянии подключения теперь следуют выбранному языку.
+* Меню в трее теперь перестраивается «вживую» при смене языка пользователем — больше не требуется перезапуск приложения для применения изменений на системном уровне.
+* Состояния радара пинга переведены со строк, зависящих от языка, на стабильные внутренние идентификаторы (`optimal`, `high_latency`, `overloaded`, `down`, `timeout`, `url_error`), что отделяет внутреннюю логику от языка интерфейса и обеспечивает надёжное сравнение состояний независимо от локали.
+* Атрибут `<html lang>` теперь динамически обновляется вместе с языком интерфейса для корректного поведения средств доступности и стабильной работы `Intl.DisplayNames` при определении названий стран.
+* Расширена поддержка атрибута `data-i18n-title` для перевода всплывающих HTML-подсказок (например, подсказки для режима PROXY).
+* Локальные переопределения названий стран (US → USA / EE. UU. / США) теперь полностью управляются через словарь i18n.
+* Функция перевода расширена поддержкой параметров для динамических строк (например, для встраивания названий серверов в уведомления о копировании в буфер обмена).
+
+---
+
+### Исправления
+
+* Исправлена проблема, при которой меню в трее оставалось на испанском языке независимо от выбранного языка интерфейса.
+* Исправлена проблема, при которой диалог OTA-обновления отображался на испанском языке независимо от выбранного языка интерфейса.
+* Исправлено отображение сообщений об ошибках движка, ошибок входа и ошибок проверки подписки на испанском языке при использовании английского интерфейса.
+* Исправлены уведомления о потере соединения (включая предупреждения Kill Switch), не учитывавшие выбранный язык.
+
+---
+
+### ⚠️ Примечания
+
+* Одновременно может быть запущен только один экземпляр Arrow VPN. При попытке запустить второй экземпляр теперь фокусируется существующее окно и показывается локализованное уведомление, вместо открытия дублирующего окна.
+* При выборе «Установить и перезапустить» во время OTA-обновления блокировка единственного экземпляра теперь явно освобождается перед перезапуском, что предотвращает редкие случаи, когда установленная новая версия могла не запуститься из-за неосвобождённой блокировки предыдущего процесса.
+* Сообщения, поступающие со стороны сервера API (например, неверные учётные данные, неактивная подписка), по-прежнему отображаются в том виде, в каком они возвращаются бэкендом. Локализация этих сообщений будет реализована в будущем обновлении на стороне сервера.
+
+---
+
 ## Arrow VPN v2.0.16
 
 This release introduces full internationalization support, featuring a dynamic UI translation engine and seamless multilingual server localization, along with important UI refinements and under-the-hood framework updates.

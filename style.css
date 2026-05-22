@@ -538,6 +538,37 @@ input:checked + .slider.killswitch-slider { background-color: #e74c3c; border-co
 
 .login-error-text { color: #e74c3c; font-size: 12px; height: 15px; font-weight: 600; }
 
+/* --- SELECTOR DE IDIOMA EN PANTALLA DE LOGIN --- */
+.login-lang-selector {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 510;
+    -webkit-app-region: no-drag;
+}
+
+/* Variante compacta del custom-select, usada en la pantalla de login.
+   Mantiene el lenguaje visual del selector de Ajustes pero más pequeño
+   y discreto. */
+.custom-select.compact {
+    width: 95px;
+    font-size: 11px;
+}
+.custom-select.compact .select-trigger {
+    padding: 5px 8px;
+    border-radius: 6px;
+}
+.custom-select.compact .select-options {
+    border-radius: 6px;
+}
+.custom-select.compact .option {
+    padding: 6px 8px;
+    font-size: 11px;
+}
+.custom-select.compact .arrow {
+    font-size: 8px;
+}
+
 .btn-logout {
     width: 100%; background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3);
     color: #e74c3c; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer;
