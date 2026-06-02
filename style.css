@@ -326,7 +326,7 @@ body {
 .dot-mantenimiento { background-color: #f39c12; color: #f39c12; }
 .dot-apagado { background-color: #e74c3c; color: #e74c3c; }
 
-.bandera { width: 16px; border-radius: 2px; margin-right: 8px; box-shadow: 0 0 3px rgba(0,0,0,0.5); }
+/* .bandera y .vless-flag definidas juntas más abajo (sección BANDERAS) */
 
 /* ==================================================== */
 /* --- ESTILOS DE LOS PANELES DE AJUSTES Y SOPORTE --- */
@@ -538,6 +538,37 @@ input:checked + .slider.killswitch-slider { background-color: #e74c3c; border-co
 
 .login-error-text { color: #e74c3c; font-size: 12px; height: 15px; font-weight: 600; }
 
+/* --- SELECTOR DE IDIOMA EN PANTALLA DE LOGIN --- */
+.login-lang-selector {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 510;
+    -webkit-app-region: no-drag;
+}
+
+/* Variante compacta del custom-select, usada en la pantalla de login.
+   Mantiene el lenguaje visual del selector de Ajustes pero más pequeño
+   y discreto. */
+.custom-select.compact {
+    width: 95px;
+    font-size: 11px;
+}
+.custom-select.compact .select-trigger {
+    padding: 5px 8px;
+    border-radius: 6px;
+}
+.custom-select.compact .select-options {
+    border-radius: 6px;
+}
+.custom-select.compact .option {
+    padding: 6px 8px;
+    font-size: 11px;
+}
+.custom-select.compact .arrow {
+    font-size: 8px;
+}
+
 .btn-logout {
     width: 100%; background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3);
     color: #e74c3c; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer;
@@ -578,7 +609,7 @@ input:checked + .slider.killswitch-slider { background-color: #e74c3c; border-co
 .vless-list-container::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
 
 .vless-copy-text { color: #3498db; font-size: 11px; }
-.vless-flag { width: 16px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+/* .vless-flag definida en la sección BANDERAS (rectangular premium) */
 
 /* ==================================================== */
 /* --- CUSTOM SELECT (Selector de Idiomas Premium) --- */
@@ -649,4 +680,142 @@ input:checked + .slider.killswitch-slider { background-color: #e74c3c; border-co
 }
 .custom-select.open .arrow {
     transform: rotate(180deg);
+}
+
+/* ============================================ */
+/* BANDERAS — rectangulares, estilo premium      */
+/* ============================================ */
+
+/* Bandera en el MENÚ de servidores (.bandera) y en la LISTA vless
+   (.vless-flag). Ambas rectangulares 4:3, bordes suaves, sin recorte. */
+.bandera,
+.vless-flag {
+    width: 24px;
+    height: 18px;
+    border-radius: 3px;
+    object-fit: cover;            /* la SVG llena el rect sin deformar */
+    vertical-align: middle;
+    margin-right: 10px;
+    flex-shrink: 0;               /* no se encoge en flex */
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* Placeholder cuando no hay bandera: rectángulo con el ISO, mismo
+   tamaño que la bandera para que la lista no se descuadre. */
+.flag-placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 18px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    font-size: 8px;
+    font-weight: 700;
+    color: #b0b8c0;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.sub-status-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Acento de color según estado, en el borde izquierdo */
+.sub-status-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #2ecc71;
+    transition: background 0.3s ease;
+}
+.sub-status-card.estado-activa::before    { background: #2ecc71; }
+.sub-status-card.estado-pronto::before     { background: #f39c12; }
+.sub-status-card.estado-expirada::before   { background: #e74c3c; }
+.sub-status-card.estado-ilimitada::before  { background: #3498db; }
+
+.sub-status-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.sub-status-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #7f8c8d;
+}
+
+.sub-status-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    color: #fff;
+}
+.estado-activa .sub-status-badge    { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+.estado-pronto .sub-status-badge     { background: rgba(243, 156, 18, 0.2); color: #f39c12; }
+.estado-expirada .sub-status-badge   { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+.estado-ilimitada .sub-status-badge  { background: rgba(52, 152, 219, 0.2); color: #3498db; }
+
+.sub-status-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.sub-status-dias {
+    font-size: 38px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+}
+
+.sub-status-dias-label {
+    font-size: 14px;
+    color: #95a5a6;
+}
+
+.sub-status-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+    margin-bottom: 12px;
+}
+
+.sub-status-trafico {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sub-status-trafico-label {
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+.sub-status-trafico-valor {
+    font-size: 13px;
+    font-weight: 600;
+    color: #d0d6dc;
 }

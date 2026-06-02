@@ -1,6 +1,6 @@
 {
   "name": "arrow-vpn",
-  "version": "2.0.16",
+  "version": "2.0.20",
   "description": "Privacy-focused VPN client for Windows powered by sing-box",
   "main": "main.js",
   "type": "commonjs",
@@ -38,11 +38,12 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://alemania.arrow-x.org:7777/descargas"
+        "url": "https://de.arrow-x.org:7777/descargas"
       }
     ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "win": {
       "icon": "icon.png",
@@ -56,7 +57,9 @@
       "createDesktopShortcut": true,
       "runAfterFinish": true,
       "shortcutName": "Arrow VPN",
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": false,
+      "allowElevation": true,
+      "include": "build/installer.nsh"
     },
     "asarUnpack": [
       "bin/**/*"

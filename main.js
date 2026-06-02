@@ -1,10 +1,25 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, session, clipboard } = require('electron');
 const Store = require('electron-store');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process'); // <-- Añadido execSync aquí
 const os = require('os');
 const net = require('net');
+const subscription = require('./subscription');
+const flags = require('./flags');
+
+// ==========================================
+// CANDADO DE INSTANCIA ÚNICA
+// Si ya hay una instancia abierta, esta se cierra inmediatamente.
+// La instancia existente recibirá el evento 'second-instance' (más abajo)
+// y traerá su ventana al frente con un aviso al usuario.
+// ==========================================
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    app.quit();
+    process.exit(0);
+}
 
 // ==========================================
 // SISTEMA ACTUALIZADOR OTA (PRODUCCIÓN)
@@ -46,14 +61,223 @@ const configEnMemoriaInicial = {
     autoConnect: false,
     killSwitch: false,
     connectionMode: 'vpn',
-    uuid: '',
-    password: '',
-    servidores: {},
+    // --- NUEVO MODELO: suscripción en vez de uuid/password ---
+    subUrlCifrada: '',        // la URL cifrada con safeStorage
+    servidores: {},           // se rellena al refrescar el sub
+    expiraSub: 0,             // timestamp Unix (0 = sin expiración)
+    traficoSub: { upload: 0, download: 0, total: 0 },
+    tituloSub: 'Arrow VPN',
     ultimoServidor: '',
     idioma: 'es'
 };
 
 let configEnMemoria = { ...configEnMemoriaInicial };
+
+// ==========================================
+// SISTEMA i18n PARA EL PROCESO PRINCIPAL
+// ==========================================
+const i18nMain = {
+    es: {
+        // Tray
+        'tray-show': 'Mostrar Arrow VPN',
+        'tray-quit': 'Salir por completo',
+
+        // Alerta de desconexión pendiente
+        'alert-disconnect-msg': 'Aún estás conectado a la VPN.',
+        'alert-disconnect-detail': 'Por favor, desconéctate antes de salir para restaurar tu red.',
+        'alert-disconnect-btn': 'Entendido',
+
+        // Actualizador OTA
+        'ota-downloading': 'Descargando actualización en 2do plano...',
+        'ota-ready': 'Actualización lista.',
+        'ota-btn-install': 'Instalar y Reiniciar',
+        'ota-btn-later': 'Más tarde',
+        'ota-title': 'Actualización Disponible',
+        'ota-message': 'Se ha descargado una nueva versión de Arrow VPN.',
+        'ota-detail': '¿Deseas instalarla y reiniciar la aplicación ahora?\n\nSi eliges "Más tarde", se instalará automáticamente cuando cierres la aplicación o apagues el equipo.',
+
+        // Resúmenes de error para la UI
+        'err-proxy-local': 'Error del proxy local.',
+        'err-vpn-internal': 'Error interno del motor VPN.',
+        'err-vpn-adapter': 'Error del adaptador VPN.',
+        'err-dns': 'Error de resolución DNS.',
+        'err-node-config': 'Configuración del nodo inválida.',
+        'err-subscription': 'Error de suscripción.',
+        'err-engine-start': 'El motor VPN no pudo iniciarse.',
+        'err-engine': 'Error del motor VPN.',
+        'err-proxy-start': 'No se pudo iniciar el proxy.',
+        'err-vpn-start': 'No se pudo iniciar la VPN.',
+
+        // Pérdida de conexión (monitor)
+        'conn-lost-blocked': 'Conexión perdida. Red bloqueada.',
+        'conn-lost': 'Conexión perdida.',
+
+        // Login
+        'login-bad-creds': 'Credenciales incorrectas',
+        'login-master-err': 'Error de conexión con el servidor maestro.',
+
+        // Validación de suscripción
+        'sub-inactive': 'Suscripción inactiva',
+        'sub-timeout': 'Timeout al validar',
+
+        // Errores al conectar
+        'conn-bad-key': 'Llave del nodo inválida.',
+        'conn-server-unreachable': 'Servidor inaccesible.',
+        'conn-sub-invalid': 'Suscripción inválida.',
+        'conn-local-cfg': 'Error de configuración local.',
+
+        // Instancia única
+        'msg-already-running': 'Arrow VPN ya está abierto.',
+
+        'sub-empty': 'Pega tu enlace de suscripción.',
+        'sub-none': 'No hay suscripción activada.',
+        'sub-expired': 'Tu suscripción ha expirado.',
+        'sub-err-timeout': 'Tiempo de espera agotado. Revisa tu conexión.',
+        'sub-err-network': 'No se pudo conectar. Revisa tu internet.',
+        'sub-err-invalid-url': 'El enlace no es válido.',
+        'sub-err-no-servers': 'El enlace no contiene servidores.',
+        'sub-err-http': 'El servidor de suscripción respondió con error.',
+        'sub-err-generic': 'No se pudo cargar la suscripción.',
+
+        "sub-hora": "hora",
+        "sub-horas": "horas"
+    },
+    en: {
+        // Tray
+        'tray-show': 'Show Arrow VPN',
+        'tray-quit': 'Quit completely',
+
+        // Pending disconnect alert
+        'alert-disconnect-msg': 'You are still connected to the VPN.',
+        'alert-disconnect-detail': 'Please disconnect before exiting to restore your network.',
+        'alert-disconnect-btn': 'Got it',
+
+        // OTA updater
+        'ota-downloading': 'Downloading update in background...',
+        'ota-ready': 'Update ready.',
+        'ota-btn-install': 'Install and Restart',
+        'ota-btn-later': 'Later',
+        'ota-title': 'Update Available',
+        'ota-message': 'A new version of Arrow VPN has been downloaded.',
+        'ota-detail': 'Do you want to install it and restart the application now?\n\nIf you choose "Later", it will be installed automatically when you close the application or shut down your computer.',
+
+        // Error summaries for the UI
+        'err-proxy-local': 'Local proxy error.',
+        'err-vpn-internal': 'Internal VPN engine error.',
+        'err-vpn-adapter': 'VPN adapter error.',
+        'err-dns': 'DNS resolution error.',
+        'err-node-config': 'Invalid node configuration.',
+        'err-subscription': 'Subscription error.',
+        'err-engine-start': 'The VPN engine could not start.',
+        'err-engine': 'VPN engine error.',
+        'err-proxy-start': 'Could not start the proxy.',
+        'err-vpn-start': 'Could not start the VPN.',
+
+        // Connection loss (monitor)
+        'conn-lost-blocked': 'Connection lost. Network blocked.',
+        'conn-lost': 'Connection lost.',
+
+        // Login
+        'login-bad-creds': 'Invalid credentials',
+        'login-master-err': 'Connection error with the master server.',
+
+        // Subscription validation
+        'sub-inactive': 'Inactive subscription',
+        'sub-timeout': 'Validation timeout',
+
+        // Connection errors
+        'conn-bad-key': 'Invalid node key.',
+        'conn-server-unreachable': 'Server unreachable.',
+        'conn-sub-invalid': 'Invalid subscription.',
+        'conn-local-cfg': 'Local configuration error.',
+
+        // Single instance
+        'msg-already-running': 'Arrow VPN is already running.',
+
+        'sub-empty': 'Paste your subscription link.',
+        'sub-none': 'No active subscription.',
+        'sub-expired': 'Your subscription has expired.',
+        'sub-err-timeout': 'Request timed out. Check your connection.',
+        'sub-err-network': 'Could not connect. Check your internet.',
+        'sub-err-invalid-url': 'The link is not valid.',
+        'sub-err-no-servers': 'The link contains no servers.',
+        'sub-err-http': 'Subscription server responded with an error.',
+        'sub-err-generic': 'Could not load the subscription.',
+
+        "sub-hora": "hour",
+        "sub-horas": "hours"
+    },
+    ru: {
+        // Трей
+        'tray-show': 'Показать Arrow VPN',
+        'tray-quit': 'Полностью выйти',
+
+        // Предупреждение о незавершённом отключении
+        'alert-disconnect-msg': 'Вы всё ещё подключены к VPN.',
+        'alert-disconnect-detail': 'Пожалуйста, отключитесь перед выходом, чтобы восстановить сеть.',
+        'alert-disconnect-btn': 'Понятно',
+
+        // Обновления OTA
+        'ota-downloading': 'Загрузка обновления в фоне...',
+        'ota-ready': 'Обновление готово.',
+        'ota-btn-install': 'Установить и перезапустить',
+        'ota-btn-later': 'Позже',
+        'ota-title': 'Доступно обновление',
+        'ota-message': 'Загружена новая версия Arrow VPN.',
+        'ota-detail': 'Установить её и перезапустить приложение сейчас?\n\nЕсли выбрать "Позже", обновление установится автоматически при закрытии приложения или выключении компьютера.',
+
+        // Краткие сообщения об ошибках для UI
+        'err-proxy-local': 'Ошибка локального прокси.',
+        'err-vpn-internal': 'Внутренняя ошибка движка VPN.',
+        'err-vpn-adapter': 'Ошибка VPN-адаптера.',
+        'err-dns': 'Ошибка разрешения DNS.',
+        'err-node-config': 'Неверная конфигурация узла.',
+        'err-subscription': 'Ошибка подписки.',
+        'err-engine-start': 'Движок VPN не смог запуститься.',
+        'err-engine': 'Ошибка движка VPN.',
+        'err-proxy-start': 'Не удалось запустить прокси.',
+        'err-vpn-start': 'Не удалось запустить VPN.',
+
+        // Потеря соединения (монитор)
+        'conn-lost-blocked': 'Соединение потеряно. Сеть заблокирована.',
+        'conn-lost': 'Соединение потеряно.',
+
+        // Вход
+        'login-bad-creds': 'Неверные учётные данные',
+        'login-master-err': 'Ошибка подключения к основному серверу.',
+
+        // Проверка подписки
+        'sub-inactive': 'Подписка неактивна',
+        'sub-timeout': 'Таймаут проверки',
+
+        // Ошибки подключения
+        'conn-bad-key': 'Неверный ключ узла.',
+        'conn-server-unreachable': 'Сервер недоступен.',
+        'conn-sub-invalid': 'Неверная подписка.',
+        'conn-local-cfg': 'Ошибка локальной конфигурации.',
+
+        // Единственный экземпляр
+        'msg-already-running': 'Arrow VPN уже запущен.',
+
+        'sub-empty': 'Вставьте ссылку на подписку.',
+        'sub-none': 'Нет активной подписки.',
+        'sub-expired': 'Срок действия подписки истёк.',
+        'sub-err-timeout': 'Превышено время ожидания. Проверьте соединение.',
+        'sub-err-network': 'Не удалось подключиться. Проверьте интернет.',
+        'sub-err-invalid-url': 'Ссылка недействительна.',
+        'sub-err-no-servers': 'Ссылка не содержит серверов.',
+        'sub-err-http': 'Сервер подписки вернул ошибку.',
+        'sub-err-generic': 'Не удалось загрузить подписку.',
+
+        "sub-hora": "час",
+        "sub-horas": "часов"
+    }
+};
+
+function t(key) {
+    const lang = (configEnMemoria && configEnMemoria.idioma) || 'es';
+    return (i18nMain[lang] && i18nMain[lang][key]) || i18nMain.es[key] || key;
+}
 
 const rutaBinarios = app.isPackaged
     ? path.join(process.resourcesPath, 'app.asar.unpacked', 'bin')
@@ -104,16 +328,51 @@ function getSettings() {
     const saved = store.get('userSettings') || {};
 
     return {
-        uuid: saved.uuid || '',
-        password: saved.password || '',
+        subUrlCifrada: saved.subUrlCifrada || '',
         servidores: saved.servidores || {},
+        expiraSub: saved.expiraSub || 0,
+        traficoSub: saved.traficoSub || { upload: 0, download: 0, total: 0 },
+        tituloSub: saved.tituloSub || 'Arrow VPN',
         ultimoServidor: saved.ultimoServidor || '',
         tray: (saved.tray === false || saved.tray === 'false') ? false : true,
         autoConnect: (saved.autoConnect === true || saved.autoConnect === 'true'),
         killSwitch: (saved.killSwitch === true || saved.killSwitch === 'true'),
         connectionMode: saved.connectionMode || 'vpn',
-        idioma: saved.idioma || 'es'
+        idioma: saved.idioma || null
     };
+}
+
+// ==========================================
+// AUTODETECCIÓN DE IDIOMA EN PRIMERA APERTURA
+// ==========================================
+// Si no hay idioma guardado en el store, leemos el locale del SO
+// vía app.getLocale() (que devuelve algo como 'ru-RU', 'es-ES', 'en-US').
+// Mapeamos a uno de nuestros 3 idiomas soportados, con fallback a 'en'
+// como default universal. La elección se persiste, así que solo aplica
+// la primera vez que el usuario abre la app.
+// ==========================================
+const IDIOMAS_SOPORTADOS = ['es', 'en', 'ru'];
+
+function detectarIdiomaSO() {
+    try {
+        const locale = (app.getLocale() || '').toLowerCase();
+        const codigo = locale.split('-')[0]; // 'ru-RU' -> 'ru'
+
+        if (IDIOMAS_SOPORTADOS.includes(codigo)) {
+            return codigo;
+        }
+    } catch (e) {}
+
+    return 'en'; // fallback universal
+}
+
+function asegurarIdiomaInicial() {
+    if (!configEnMemoria.idioma) {
+        const detectado = detectarIdiomaSO();
+        configEnMemoria.idioma = detectado;
+        store.set('userSettings', configEnMemoria);
+        console.log(`[i18n] Idioma autodetectado en primera apertura: ${detectado}`);
+    }
 }
 
 configEnMemoria = getSettings();
@@ -158,9 +417,9 @@ function mostrarAlertaDesconexion() {
     dialog.showMessageBoxSync(mainWindow, {
         type: 'warning',
         title: 'Arrow VPN',
-        message: 'Aún estás conectado a la VPN.',
-        detail: 'Por favor, desconéctate antes de salir para restaurar tu red.',
-        buttons: ['Entendido']
+        message: t('alert-disconnect-msg'),
+        detail: t('alert-disconnect-detail'),
+        buttons: [t('alert-disconnect-btn')]
     });
 }
 
@@ -181,37 +440,51 @@ function resumirErrorParaUI(errorMsg, modo = 'vpn') {
 
     if (txt.includes('timeout esperando puerto')) {
         return modo === 'proxy'
-            ? 'Error del proxy local.'
-            : 'Error interno del motor VPN.';
+            ? t('err-proxy-local')
+            : t('err-vpn-internal');
     }
 
     if (txt.includes('adaptador tun')) {
-        return 'Error del adaptador VPN.';
+        return t('err-vpn-adapter');
     }
 
     if (txt.includes('dns')) {
-        return 'Error de resolución DNS.';
+        return t('err-dns');
     }
 
     if (txt.includes('llave del nodo')) {
-        return 'Configuración del nodo inválida.';
+        return t('err-node-config');
     }
 
     if (txt.includes('suscripción')) {
-        return 'Error de suscripción.';
+        return t('err-subscription');
     }
 
     if (txt.includes('sing-box terminó inmediatamente')) {
-        return 'El motor VPN no pudo iniciarse.';
+        return t('err-engine-start');
     }
 
     if (txt.includes('no se pudo lanzar sing-box') || txt.includes('error iniciando sing-box')) {
-        return 'Error del motor VPN.';
+        return t('err-engine');
     }
 
     return modo === 'proxy'
-        ? 'No se pudo iniciar el proxy.'
-        : 'No se pudo iniciar la VPN.';
+        ? t('err-proxy-start')
+        : t('err-vpn-start');
+}
+
+function mapearErrorSub(codigo) {
+    switch (codigo) {
+        case 'timeout':       return t('sub-err-timeout');
+        case 'network':       return t('sub-err-network');
+        case 'invalid_url':   return t('sub-err-invalid-url');
+        case 'no_servers':    return t('sub-err-no-servers');
+        default:
+            if (String(codigo).startsWith('http_')) {
+                return t('sub-err-http');
+            }
+            return t('sub-err-generic');
+    }
 }
 
 function refrescarProxyWindows() {
@@ -399,37 +672,30 @@ function limpiarBuffersSingbox() {
     singboxStdOut = '';
 }
 
+// ==========================================
+// NUEVA FUNCIÓN detenerSingbox (DOBLE TAP SÍNCRONO)
+// ==========================================
 function detenerSingbox() {
     return new Promise((resolve) => {
+        // 1. Intentar el cierre elegante de Node.js
         try {
             if (proxyProcess && !proxyProcess.killed) {
-                const p = proxyProcess;
-
-                proxyProcess = null;
-
-                p.once('exit', () => resolve());
-
-                try {
-                    p.kill();
-                } catch (e) {
-                    resolve();
-                }
-
-                setTimeout(() => {
-                    resolve();
-                }, 1500);
-
-                return;
+                proxyProcess.kill();
             }
-        } catch (e) {}
-
-        try {
-            spawn('taskkill', ['/IM', 'sing-box.exe', '/F', '/T'], { windowsHide: true });
         } catch (e) {}
 
         proxyProcess = null;
 
-        setTimeout(resolve, 800);
+        // 2. Failsafe FORZADO y SÍNCRONO con execSync
+        try {
+            execSync('taskkill /IM sing-box.exe /F /T', {
+                windowsHide: true,
+                stdio: 'ignore'
+            });
+        } catch (e) {}
+
+        // 3. Pausa de gracia de 1.5s para liberar puertos
+        setTimeout(resolve, 1500);
     });
 }
 
@@ -488,7 +754,7 @@ function esperarPuerto(host, port, timeoutMs = 8000) {
     });
 }
 
-async function esperarInterfazTun(nombreInterfaz, timeoutMs = 12000) {
+async function esperarInterfazTun(nombreInterfaz, timeoutMs = 30000) {
     const inicio = Date.now();
 
     while (Date.now() - inicio < timeoutMs) {
@@ -549,6 +815,9 @@ function ejecutarComandoCapturando(cmd, args = [], options = {}) {
 async function iniciarSingbox(configPath) {
     await detenerSingbox();
     limpiarBuffersSingbox();
+
+    // Pausa táctica de 2 segundos para PCs viejas.
+    await sleep(2000);
 
     try {
         if (fs.existsSync(singboxLogPath)) {
@@ -655,8 +924,8 @@ function iniciarMonitorSingbox() {
                     mainWindow.webContents.send(
                         'error-suscripcion',
                         configEnMemoria.killSwitch
-                            ? `Conexión perdida. Red bloqueada. ${msgBase}`
-                            : `Conexión perdida. ${msgBase}`
+                            ? `${t('conn-lost-blocked')} ${msgBase}`
+                            : `${t('conn-lost')} ${msgBase}`
                     );
                 }
             }
@@ -668,6 +937,9 @@ function iniciarMonitorSingbox() {
 
 // ==========================================
 // MOTOR DE PING LOCAL TCP
+// Estados son CÓDIGOS estables (no texto traducible).
+// El renderer mapea estos códigos a texto según idioma.
+// Códigos: optimal | high_latency | overloaded | down | timeout | url_error
 // ==========================================
 ipcMain.on('ping-servers', async (event, servidores) => {
     const resultados = {};
@@ -685,7 +957,7 @@ ipcMain.on('ping-servers', async (event, servidores) => {
                 port = parseInt(urlObj.port || '443', 10);
             } catch (e) {
                 resultados[idPais] = {
-                    estado: "Error URL",
+                    estado: "url_error",
                     ping: -1
                 };
 
@@ -701,14 +973,14 @@ ipcMain.on('ping-servers', async (event, servidores) => {
             socket.connect(port, host, () => {
                 const ping = Date.now() - startTime;
 
-                let estado = "Óptimo";
+                let estado = "optimal";
 
                 if (ping >= 200 && ping <= 800) {
-                    estado = "Latencia Alta";
+                    estado = "high_latency";
                 }
 
                 if (ping > 800) {
-                    estado = "Sobrecargado";
+                    estado = "overloaded";
                 }
 
                 resultados[idPais] = {
@@ -722,7 +994,7 @@ ipcMain.on('ping-servers', async (event, servidores) => {
 
             socket.on('error', () => {
                 resultados[idPais] = {
-                    estado: "Caído",
+                    estado: "down",
                     ping: -1
                 };
 
@@ -732,7 +1004,7 @@ ipcMain.on('ping-servers', async (event, servidores) => {
 
             socket.on('timeout', () => {
                 resultados[idPais] = {
-                    estado: "Timeout",
+                    estado: "timeout",
                     ping: -1
                 };
 
@@ -747,86 +1019,137 @@ ipcMain.on('ping-servers', async (event, servidores) => {
     event.reply('ping-results', resultados);
 });
 
-ipcMain.on('login-request', async (event, creds) => {
+// ==========================================
+// BANDERAS: sincroniza el set de ISOs de los servidores.
+// Devuelve { iso: rutaLocalAbsoluta|null } para que la UI
+// las cargue con file://
+// ==========================================
+ipcMain.on('sincronizar-banderas', async (event, listaIso) => {
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(`${API_BASE_URL}/api/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                uuid: creds.uuid,
-                password: creds.password
-            }),
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        const data = await response.json();
-
-        if (response.ok && data.valido) {
-            configEnMemoria.uuid = creds.uuid;
-            configEnMemoria.password = creds.password;
-            configEnMemoria.servidores = data.servidores;
-
-            store.set('userSettings', configEnMemoria);
-
-            event.reply('login-success', configEnMemoria);
-        } else {
-            event.reply('login-error', data.msg || "Credenciales incorrectas");
-        }
+        const mapa = await flags.sincronizarBanderas(listaIso);
+        event.reply('banderas-listas', mapa);
     } catch (e) {
-        if (
-            configEnMemoria.uuid &&
-            creds.uuid === configEnMemoria.uuid &&
-            creds.password === configEnMemoria.password
-        ) {
-            console.log("Activando Login en Caché por falta de red...");
-            event.reply('login-success', configEnMemoria);
-        } else {
-            event.reply('login-error', "Error de conexión con el servidor maestro.");
-        }
+        registrarErrorApp('sincronizar-banderas', e.message || String(e));
+        event.reply('banderas-listas', {});
     }
 });
 
-ipcMain.on('logout-request', () => {
-    configEnMemoria.uuid = '';
-    configEnMemoria.password = '';
+// ==========================================
+// ACTIVAR SUSCRIPCIÓN (reemplaza al login)
+// El usuario pega su link de suscripción una vez.
+// Descargamos, parseamos, guardamos cifrado.
+// ==========================================
+ipcMain.on('activar-suscripcion', async (event, payload) => {
+    const subUrl = (payload && payload.subUrl ? payload.subUrl : '').trim();
+
+    if (!subUrl) {
+        return event.reply('suscripcion-error', t('sub-empty'));
+    }
+
+    const resultado = await subscription.obtenerSuscripcion(subUrl);
+
+    if (!resultado.ok) {
+        const msg = mapearErrorSub(resultado.error);
+        return event.reply('suscripcion-error', msg);
+    }
+
+    // Convertir el array de servidores a objeto indexado por id
+    // (para mantener compatibilidad con tu UI que usa servidores[idPais])
+    const servidoresObj = {};
+    for (const srv of resultado.servidores) {
+        servidoresObj[srv.id] = {
+            nombre: srv.nombre,
+            nombreEN: srv.nombreEN,
+            nombreRU: srv.nombreRU,
+            vless: srv.vless,
+            iso: srv.iso,
+            emoji: srv.emoji,
+            host: srv.host,
+        };
+    }
+
+    // Cifrar y guardar
+    configEnMemoria.subUrlCifrada = subscription.cifrarSubUrl(subUrl);
+    configEnMemoria.servidores = servidoresObj;
+    configEnMemoria.expiraSub = resultado.expira;
+    configEnMemoria.traficoSub = resultado.trafico;
+    configEnMemoria.tituloSub = resultado.titulo;
+
+    store.set('userSettings', configEnMemoria);
+
+    event.reply('suscripcion-exito', {
+        servidores: servidoresObj,
+        expira: resultado.expira,
+        trafico: resultado.trafico,
+        titulo: resultado.titulo,
+    });
+});
+
+// ==========================================
+// REFRESCAR SUSCRIPCIÓN (silencioso, en background)
+// Se llama al abrir la app y periódicamente.
+// Actualiza la lista de servidores y la expiración.
+// ==========================================
+ipcMain.on('refrescar-suscripcion', async (event) => {
+    const subUrl = subscription.descifrarSubUrl(configEnMemoria.subUrlCifrada);
+
+    if (!subUrl) {
+        return event.reply('suscripcion-error', t('sub-none'));
+    }
+
+    const resultado = await subscription.obtenerSuscripcion(subUrl);
+
+    if (!resultado.ok) {
+        // En refresh silencioso, si falla la red usamos lo cacheado.
+        // Solo avisamos, no borramos nada.
+        return event.reply('suscripcion-refrescada', {
+            servidores: configEnMemoria.servidores,
+            expira: configEnMemoria.expiraSub,
+            trafico: configEnMemoria.traficoSub,
+            titulo: configEnMemoria.tituloSub,
+            offline: true,
+        });
+    }
+
+    const servidoresObj = {};
+    for (const srv of resultado.servidores) {
+        servidoresObj[srv.id] = {
+            nombre: srv.nombre,
+            nombreEN: srv.nombreEN,
+            nombreRU: srv.nombreRU,
+            vless: srv.vless,
+            iso: srv.iso,
+            emoji: srv.emoji,
+            host: srv.host,
+        };
+    }
+
+    configEnMemoria.servidores = servidoresObj;
+    configEnMemoria.expiraSub = resultado.expira;
+    configEnMemoria.traficoSub = resultado.trafico;
+    configEnMemoria.tituloSub = resultado.titulo;
+
+    store.set('userSettings', configEnMemoria);
+
+    event.reply('suscripcion-refrescada', {
+        servidores: servidoresObj,
+        expira: resultado.expira,
+        trafico: resultado.trafico,
+        titulo: resultado.titulo,
+        offline: false,
+    });
+});
+
+ipcMain.on('borrar-suscripcion', () => {
+    configEnMemoria.subUrlCifrada = '';
     configEnMemoria.servidores = {};
+    configEnMemoria.expiraSub = 0;
+    configEnMemoria.traficoSub = { upload: 0, download: 0, total: 0 };
+    configEnMemoria.tituloSub = 'Arrow VPN';
+    configEnMemoria.ultimoServidor = '';
 
     store.set('userSettings', configEnMemoria);
 });
-
-async function verificarSuscripcionReal(uuid) {
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-        const response = await fetch(`${API_BASE_URL}/validar/${uuid}`, {
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            return {
-                valido: false,
-                msg: "Suscripción inactiva"
-            };
-        }
-
-        return await response.json();
-    } catch (e) {
-        return {
-            valido: false,
-            msg: "Timeout al validar"
-        };
-    }
-}
 
 function generarConfigSingbox(vlessUrl, nodeIP) {
     try {
@@ -1048,23 +1371,25 @@ ipcMain.on('conectar-vpn', async (event, payload) => {
         try {
             vlessUrlObj = new URL(vlessKey);
         } catch (e) {
-            return event.reply('error-suscripcion', "Llave del nodo inválida.");
+            return event.reply('error-suscripcion', t('conn-bad-key'));
         }
 
         const nodeIP = await resolverIP(vlessUrlObj.hostname);
 
         if (!nodeIP) {
-            return event.reply('error-suscripcion', "Servidor inaccesible.");
+            return event.reply('error-suscripcion', t('conn-server-unreachable'));
         }
 
-        const status = await verificarSuscripcionReal(configEnMemoria.uuid);
-
-        if (!status.valido) {
-            return event.reply('error-suscripcion', status.msg || "Suscripción inválida.");
+        // Chequeo de expiración local (0 = sin expiración)
+        if (configEnMemoria.expiraSub && configEnMemoria.expiraSub > 0) {
+            const ahora = Math.floor(Date.now() / 1000);
+            if (ahora >= configEnMemoria.expiraSub) {
+                return event.reply('error-suscripcion', t('sub-expired'));
+            }
         }
 
         if (!generarConfigSingbox(vlessKey, nodeIP)) {
-            return event.reply('error-suscripcion', "Error de configuración local.");
+            return event.reply('error-suscripcion', t('conn-local-cfg'));
         }
 
         // Limpieza previa por si quedó algo de una sesión anterior
@@ -1082,7 +1407,7 @@ ipcMain.on('conectar-vpn', async (event, payload) => {
             await esperarPuerto('127.0.0.1', puertoStealthLocal, 8000);
             activarProxySistema();
         } else {
-            const interfazLista = await esperarInterfazTun('ArrowTUN', 12000);
+            const interfazLista = await esperarInterfazTun('ArrowTUN', 30000);
 
             if (!interfazLista) {
                 throw new Error('El adaptador TUN no apareció a tiempo.');
@@ -1182,17 +1507,47 @@ app.on('will-quit', async () => {
     limpiarReglasFirewall();
 });
 
+// ==========================================
+// SEGUNDA INSTANCIA: si el usuario intenta abrir
+// la app de nuevo, traemos al frente la ventana
+// existente y le mostramos un aviso.
+// ==========================================
+app.on('second-instance', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+    }
+
+    if (!mainWindow.isVisible()) {
+        mainWindow.show();
+    }
+
+    mainWindow.focus();
+
+    try {
+        mainWindow.webContents.send('app-toast', t('msg-already-running'));
+    } catch (e) {}
+});
+
 ipcMain.on('get-settings', (event) => {
     event.reply('load-settings', configEnMemoria);
 });
 
 ipcMain.on('save-settings', (event, data) => {
+    const idiomaAnterior = configEnMemoria.idioma;
+
     configEnMemoria = {
         ...configEnMemoria,
         ...data
     };
 
     store.set('userSettings', configEnMemoria);
+
+    // Si el idioma cambió, reconstruimos el menú del tray
+    if (data.idioma && data.idioma !== idiomaAnterior) {
+        aplicarMenuTray();
+    }
 
     if (!data.killSwitch) {
         try {
@@ -1211,6 +1566,20 @@ ipcMain.on('get-app-version', (event) => {
     event.reply('app-version', app.getVersion());
 });
 
+ipcMain.on('copiar-suscripcion', (event) => {
+    try {
+        const subUrl = subscription.descifrarSubUrl(configEnMemoria.subUrlCifrada);
+        if (!subUrl) {
+            return event.reply('suscripcion-copiada', { ok: false });
+        }
+        clipboard.writeText(subUrl);
+        event.reply('suscripcion-copiada', { ok: true });
+    } catch (e) {
+        registrarErrorApp('copiar-suscripcion', e.message || String(e));
+        event.reply('suscripcion-copiada', { ok: false });
+    }
+});
+
 ipcMain.on('minimizar-ventana', () => {
     mainWindow.minimize();
 });
@@ -1222,24 +1591,30 @@ function createTray() {
         })
     );
 
+    aplicarMenuTray();
+
+    tray.on('double-click', () => mainWindow.show());
+}
+
+function aplicarMenuTray() {
+    if (!tray || tray.isDestroyed()) return;
+
     tray.setContextMenu(Menu.buildFromTemplate([
         {
-            label: 'Mostrar Arrow VPN',
+            label: t('tray-show'),
             click: () => mainWindow.show()
         },
         {
             type: 'separator'
         },
         {
-            label: 'Salir por completo',
+            label: t('tray-quit'),
             click: () => {
                 app.isQuitting = true;
                 app.quit();
             }
         }
     ]));
-
-    tray.on('double-click', () => mainWindow.show());
 }
 
 // ==========================================
@@ -1247,21 +1622,21 @@ function createTray() {
 // ==========================================
 autoUpdater.on('update-available', () => {
     if (mainWindow) {
-        mainWindow.webContents.send('update-status', 'Descargando actualización en 2do plano...');
+        mainWindow.webContents.send('update-status', t('ota-downloading'));
     }
 });
 
 autoUpdater.on('update-downloaded', () => {
     if (mainWindow) {
-        mainWindow.webContents.send('update-status', 'Actualización lista.');
+        mainWindow.webContents.send('update-status', t('ota-ready'));
     }
 
     const dialogOpts = {
         type: 'info',
-        buttons: ['Instalar y Reiniciar', 'Más tarde'],
-        title: 'Actualización Disponible',
-        message: 'Se ha descargado una nueva versión de Arrow VPN.',
-        detail: '¿Deseas instalarla y reiniciar la aplicación ahora?\n\nSi eliges "Más tarde", se instalará automáticamente cuando cierres la aplicación o apagues el equipo.',
+        buttons: [t('ota-btn-install'), t('ota-btn-later')],
+        title: t('ota-title'),
+        message: t('ota-message'),
+        detail: t('ota-detail'),
         defaultId: 0,
         cancelId: 1
     };
@@ -1270,6 +1645,15 @@ autoUpdater.on('update-downloaded', () => {
         if (returnValue.response === 0) {
             try {
                 await detenerSingbox();
+            } catch (e) {}
+
+            // Liberamos el candado de instancia única antes de que el
+            // updater lance la nueva versión. Si no lo hiciéramos,
+            // podría haber una carrera donde el nuevo proceso intenta
+            // arrancar mientras el SO aún tiene el mutex del viejo y
+            // se autoexpulsa pensando que ya hay una instancia abierta.
+            try {
+                app.releaseSingleInstanceLock();
             } catch (e) {}
 
             autoUpdater.quitAndInstall(false, true);
@@ -1327,6 +1711,12 @@ function limpiarAccesosDirectosFantasma() {
 }
 
 app.whenReady().then(async () => {
+    // Autodetectar idioma del SO si es la primera apertura.
+    // Debe ejecutarse aquí porque app.getLocale() requiere que
+    // el módulo 'app' esté listo. Se ejecuta ANTES de createTray()
+    // porque el menú del tray usa t() y necesita el idioma resuelto.
+    asegurarIdiomaInicial();
+
     limpiarAccesosDirectosFantasma();
 
     try {
