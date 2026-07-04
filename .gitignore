@@ -3,17 +3,9 @@
 # ========================
 node_modules/
 dist/
+build/
 out/
 release/
-
-# build/ contiene MEZCLA: código fuente (installer.nsh, iconos)
-# y salida temporal de electron-builder. Ignoramos solo la salida.
-build/win-unpacked/
-build/mac/
-build/linux*/
-build/*.exe
-build/*.blockmap
-build/*.yml
 
 # ========================
 # Logs
@@ -22,8 +14,6 @@ build/*.yml
 xray_error.log
 xray_access.log
 singbox_error.log
-app_error.log
-singbox_pingtest.log
 
 # ========================
 # Runtime / config local
@@ -40,11 +30,8 @@ arrow_credenciales.json
 # ========================
 # Binaries / builds
 # ========================
-# Binarios compilados (instalador), pero NO los de bin/
 *.exe
 *.asar
-!bin/*.exe
-!bin/*.dll
 
 # ========================
 # OS junk
@@ -69,11 +56,3 @@ latest.yml
 # ========================
 *.tmp
 *.bak
-
-# OneDrive / sync conflicts
-*Name clash*
-*.tmp.*
-
-# electron-builder cache
-.cache/
-electron-builder.env

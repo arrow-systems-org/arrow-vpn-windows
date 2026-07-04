@@ -492,6 +492,23 @@
             return nombreOriginalBackend;
         }
 
+        // Si el remark del servidor tiene contenido "especial" (corchetes,
+        // paréntesis, palabras que no son solo el nombre del país), respetamos
+        // el remark del backend en lugar de traducir por código ISO.
+        // Ejemplos que NO se traducen:
+        //   "Germany [LTE] Белые списки"  → se queda tal cual
+        //   "Netherlands (Premium)"        → se queda tal cual
+        //   "USA #2"                       → se queda tal cual
+        // Ejemplos que SÍ se traducen al idioma:
+        //   "Germany"                      → "Alemania" en es
+        //   "Netherlands"                  → "Países Bajos" en es
+        const nombreBackend = (nombreOriginalBackend || '').trim();
+        const tieneContenidoEspecial = /[\[\]\(\)#\/]|[А-Яа-я]/.test(nombreBackend);
+
+        if (tieneContenidoEspecial) {
+            return nombreBackend;
+        }
+
         try {
             const traductor = new Intl.DisplayNames([currentLangValue], { type: 'region' });
             let nombreTraducido = traductor.of(codigoIso.toUpperCase());

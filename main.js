@@ -289,6 +289,22 @@ const configJsonPath = path.join(app.getPath('userData'), 'config.json');
 const singboxLogPath = path.join(app.getPath('userData'), 'singbox_error.log');
 const appErrorLogPath = path.join(app.getPath('userData'), 'app_error.log');
 
+// ==========================================
+// FLAG DE PROXY ACTIVO (anti-crash)
+// ==========================================
+// Cuando activamos el proxy del sistema, escribimos este archivo en disco.
+// Cuando desactivamos limpiamente, lo borramos.
+//
+// Al arrancar la app, si este archivo existe, significa que la sesión
+// anterior terminó abruptamente (crash, Task Manager, BSOD, apagón)
+// con el proxy ACTIVO. En ese caso, limpiamos el registro AGRESIVAMENTE
+// antes de hacer nada más, para devolver internet al usuario.
+//
+// Contenido del flag (JSON): { port, modo, timestamp_iso }
+// Solo metadatos para debugging; la limpieza no depende del contenido.
+// ==========================================
+const proxyFlagPath = path.join(app.getPath('userData'), 'proxy_active.flag');
+
 const API_BASE_URL = 'https://arrow-x.org';
 
 function getLocalIP() {
@@ -511,6 +527,106 @@ function refrescarProxyWindows() {
     } catch (e) {}
 }
 
+// ==========================================
+// HELPERS DEL FLAG DE PROXY ACTIVO
+// ==========================================
+
+function marcarProxyActivo(puerto, modo) {
+    try {
+        const data = JSON.stringify({
+            port: puerto,
+            modo: modo || 'proxy',
+            timestamp_iso: new Date().toISOString(),
+            pid: process.pid
+        });
+        fs.writeFileSync(proxyFlagPath, data, 'utf8');
+    } catch (e) {
+        registrarErrorApp('marcar-proxy-activo', e.message || String(e));
+    }
+}
+
+function marcarProxyInactivo() {
+    try {
+        if (fs.existsSync(proxyFlagPath)) {
+            fs.unlinkSync(proxyFlagPath);
+        }
+    } catch (e) {
+        registrarErrorApp('marcar-proxy-inactivo', e.message || String(e));
+    }
+}
+
+function huboProxyActivoAnteriormente() {
+    try {
+        return fs.existsSync(proxyFlagPath);
+    } catch (e) {
+        return false;
+    }
+}
+
+// ==========================================
+// LIMPIEZA AGRESIVA DEL PROXY DEL SISTEMA
+// ==========================================
+// Versión "tierra arrasada": no solo desactiva el proxy (ProxyEnable=0),
+// sino que BORRA del registro los valores ProxyServer y ProxyOverride.
+// Esto evita que Windows o algún proceso reactive accidentalmente el
+// proxy apuntando a un puerto local que ya no escucha.
+//
+// Se usa:
+//   - Al arrancar si detectamos que la sesión anterior crasheó
+//   - En el hook before-quit (extra defensa)
+//   - En SIGINT/SIGTERM (limpieza síncrona)
+//   - En uncaughtException
+// ==========================================
+function limpiarProxySistemaAgresivo() {
+    // 1. Decirle a Electron que use direct://
+    try {
+        const p = session.defaultSession.setProxy({
+            proxyRules: 'direct://'
+        });
+        if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
+
+    // 2. ProxyEnable=0
+    try {
+        execSync(
+            'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f',
+            { windowsHide: true, stdio: 'ignore' }
+        );
+    } catch (e) {}
+
+    // 3. BORRAR ProxyServer (no solo deshabilitarlo)
+    try {
+        execSync(
+            'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /f',
+            { windowsHide: true, stdio: 'ignore' }
+        );
+    } catch (e) {
+        // Si no existía, el comando devuelve error y no nos importa
+    }
+
+    // 4. BORRAR ProxyOverride si quedó alguna
+    try {
+        execSync(
+            'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyOverride /f',
+            { windowsHide: true, stdio: 'ignore' }
+        );
+    } catch (e) {}
+
+    // 5. AutoConfigURL por si quedó algo de PAC
+    try {
+        execSync(
+            'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v AutoConfigURL /f',
+            { windowsHide: true, stdio: 'ignore' }
+        );
+    } catch (e) {}
+
+    // 6. Avisar a WinINET que recargue settings
+    refrescarProxyWindows();
+
+    // 7. Borrar el flag (ya no hay proxy activo)
+    marcarProxyInactivo();
+}
+
 function limpiarProxySistema() {
     try {
         const p = session.defaultSession.setProxy({
@@ -537,6 +653,9 @@ function limpiarProxySistema() {
     } catch (e) {}
 
     refrescarProxyWindows();
+
+    // Borrar el flag — ya no hay proxy activo
+    marcarProxyInactivo();
 }
 
 function activarProxySistema() {
@@ -581,6 +700,10 @@ function activarProxySistema() {
     } catch (e) {}
 
     refrescarProxyWindows();
+
+    // Marcar el flag — si la app crashea antes de un cierre limpio,
+    // el próximo arranque detectará este archivo y limpiará el registro.
+    marcarProxyActivo(puertoStealthLocal, 'proxy');
 }
 
 function limpiarReglasFirewall() {
@@ -1508,6 +1631,103 @@ app.on('will-quit', async () => {
 });
 
 // ==========================================
+// HOOKS DE CIERRE DEFENSIVOS (anti-crash)
+// ==========================================
+// will-quit cubre el cierre limpio, pero si la app muere por crash,
+// Task Manager, BSOD o señal del sistema, el proxy queda activado en
+// el registro de Windows apuntando a un puerto local que ya no escucha,
+// y el usuario se queda sin internet hasta reiniciar.
+//
+// Por eso registramos múltiples hooks para intentar limpiar lo más
+// agresivamente posible antes de morir. La función agresiva usa
+// execSync para garantizar ejecución síncrona (los hooks de cierre
+// no esperan a operaciones asíncronas).
+// ==========================================
+
+// before-quit dispara antes que will-quit (ventana de oportunidad mayor)
+app.on('before-quit', () => {
+    try {
+        limpiarProxySistemaAgresivo();
+    } catch (e) {}
+});
+
+// SIGINT (Ctrl+C en consola, también enviado por algunos task managers)
+process.on('SIGINT', () => {
+    try {
+        limpiarProxySistemaAgresivo();
+    } catch (e) {}
+    process.exit(0);
+});
+
+// SIGTERM (kill normal, shutdown del SO)
+process.on('SIGTERM', () => {
+    try {
+        limpiarProxySistemaAgresivo();
+    } catch (e) {}
+    process.exit(0);
+});
+
+// SIGHUP (terminal cerrado)
+process.on('SIGHUP', () => {
+    try {
+        limpiarProxySistemaAgresivo();
+    } catch (e) {}
+    process.exit(0);
+});
+
+// exit es síncrono y última oportunidad antes de que el proceso muera
+process.on('exit', () => {
+    try {
+        // Limpieza mínima SÍNCRONA (no podemos hacer async aquí)
+        // Solo registry ops, las más críticas
+        if (huboProxyActivoAnteriormente()) {
+            try {
+                execSync(
+                    'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f',
+                    { windowsHide: true, stdio: 'ignore', timeout: 2000 }
+                );
+            } catch (e) {}
+            try {
+                execSync(
+                    'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /f',
+                    { windowsHide: true, stdio: 'ignore', timeout: 2000 }
+                );
+            } catch (e) {}
+            try {
+                fs.unlinkSync(proxyFlagPath);
+            } catch (e) {}
+        }
+    } catch (e) {}
+});
+
+// Si la app crashea por un error no capturado, intentar limpiar antes de morir
+process.on('uncaughtException', (err) => {
+    try {
+        registrarErrorApp(
+            'uncaught-exception',
+            err.stack || err.message || String(err)
+        );
+    } catch (e) {}
+
+    try {
+        limpiarProxySistemaAgresivo();
+    } catch (e) {}
+
+    // Dejar que el proceso muera (no continuar con estado inconsistente)
+    process.exit(1);
+});
+
+// Promesas rechazadas no manejadas: solo loguear, no matar la app
+process.on('unhandledRejection', (reason) => {
+    try {
+        registrarErrorApp(
+            'unhandled-rejection',
+            reason && reason.stack ? reason.stack : String(reason)
+        );
+    } catch (e) {}
+});
+
+// ==========================================
 // SEGUNDA INSTANCIA: si el usuario intenta abrir
 // la app de nuevo, traemos al frente la ventana
 // existente y le mostramos un aviso.
@@ -1728,7 +1948,34 @@ app.whenReady().then(async () => {
         );
     }
 
-    limpiarProxySistema();
+    // ==========================================
+    // RECUPERACIÓN POST-CRASH (Capa 1 anti-crash)
+    // ==========================================
+    // Si el archivo proxy_active.flag existe, significa que la sesión
+    // anterior terminó abruptamente (crash, Task Manager, BSOD, apagón)
+    // mientras el proxy estaba activado en el registro de Windows.
+    // Hacemos limpieza AGRESIVA para devolver internet al usuario.
+    // ==========================================
+    if (huboProxyActivoAnteriormente()) {
+        registrarErrorApp(
+            'startup-recovery',
+            'Detectado flag de proxy activo: la sesión anterior crasheó. ' +
+            'Ejecutando limpieza agresiva del registro.'
+        );
+
+        try {
+            limpiarProxySistemaAgresivo();
+        } catch (e) {
+            registrarErrorApp(
+                'startup-recovery-fail',
+                e.stack || e.message || String(e)
+            );
+        }
+    } else {
+        // Limpieza preventiva normal (como antes)
+        limpiarProxySistema();
+    }
+
     limpiarReglasFirewall();
 
     createWindow();

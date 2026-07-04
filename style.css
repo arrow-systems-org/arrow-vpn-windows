@@ -277,6 +277,9 @@ body {
     bottom: 100px;
     width: 90%;
     max-width: 340px;
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
     background: rgba(15, 15, 20, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 15px;
@@ -289,6 +292,18 @@ body {
     transform: translateY(15px);
     pointer-events: none;
     transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Scrollbar fina del menú de servidores (coherente con paneles flotantes) */
+.server-menu::-webkit-scrollbar {
+    width: 4px;
+}
+.server-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+.server-menu::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .server-menu.abierto {
