@@ -1,0 +1,1599 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arrow VPN</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-wrapper">
+
+    <div class="title-bar">
+        <div class="title-bar-drag-area"></div>
+        <div class="window-controls">
+            <button class="win-btn" id="btn-minimizar">─</button>
+            <button class="win-btn close-btn" id="btn-cerrar">✕</button>
+        </div>
+    </div>
+
+    <div id="pantalla-login" class="pantalla-login">
+        <div class="login-lang-selector">
+            <div class="custom-select compact" id="custom-idioma-select-login">
+                <div class="select-trigger">
+                    <span id="select-trigger-text-login">Español</span>
+                    <span class="arrow">▼</span>
+                </div>
+
+                <div class="select-options">
+                    <div class="option selected" data-value="es">Español</div>
+                    <div class="option" data-value="en">English</div>
+                    <div class="option" data-value="ru">Русский</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="login-box">
+            <h2 data-i18n="onb-title">Activar Arrow VPN</h2>
+            <p data-i18n="onb-sub">Pega tu enlace de suscripción para comenzar</p>
+            <input type="text" id="onb-suburl" class="login-input"
+                   placeholder="https://arrow-x.org/sub/..."
+                   data-i18n="onb-url-ph" spellcheck="false" autocomplete="off">
+            <div id="onb-error" class="login-error-text"></div>
+            <button id="btn-activar" class="btn-login" data-i18n="btn-activar">Activar</button>
+            <p class="onb-hint" data-i18n="onb-hint">
+                ¿No tienes un enlace? Consíguelo en arrow-x.org
+            </p>
+        </div>
+    </div>
+
+    <div class="header">
+        <button class="icon-btn" id="btn-ayuda">?</button>
+        <h2>Arrow VPN</h2>
+        <button class="icon-btn" id="btn-ajustes">⚙</button>
+    </div>
+
+    <div class="mode-selector">
+        <button class="mode-btn active" id="btn-modo-vpn">VPN</button>
+        <button class="mode-btn" id="btn-modo-proxy" data-i18n-title="proxy-tooltip" title="Ideal para redes bloqueadas o Wi-Fi público estricto">PROXY</button>
+    </div>
+
+    <div class="status-text" id="main-status-text" data-i18n="status-inactivo">Protección Inactiva</div>
+
+    <div class="btn-maestro-container">
+        <button class="btn-conectar" id="btn-conectar">
+            <div class="rayo">
+                <svg xmlns="http://www.w3.org/2000/svg" height="65px" viewBox="0 -960 960 960" width="65px" fill="currentColor">
+                    <path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-84 31.5-156.5T197-763l56 56q-44 44-68.5 102T160-480q0 134 93 227t227 93q134 0 227-93t93-227q0-67-24.5-125T707-707l56-56q54 54 85.5 126.5T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-40-400v-400h80v400h-80Z"/>
+                </svg>
+            </div>
+            <span id="btn-conectar-text" data-i18n="btn-conectar">CONECTAR</span>
+        </button>
+    </div>
+
+    <div class="server-menu" id="menu-servidores"></div>
+
+    <div class="bottom-container">
+        <div class="bottom-label" data-i18n="ubi-actual">Ubicación Actual</div>
+        <button class="btn-servidor" id="btn-abrir-servidores">
+            <div class="server-info" id="info-servidor-actual" data-i18n="cargando-nodos">
+                Cargando Nodos...
+            </div>
+            <span>▼</span>
+        </button>
+    </div>
+
+    <div class="overlay" id="overlay-menus"></div>
+
+    <div class="panel-flotante" id="panel-soporte">
+        <h3 class="panel-title" data-i18n="panel-soporte-tit">Soporte Técnico</h3>
+
+        <!-- Tarjeta de estado de suscripción -->
+        <div class="sub-status-card" id="sub-status-card">
+            <div class="sub-status-header">
+                <span class="sub-status-label" id="sub-status-tiempo-label">Tiempo restante</span>
+                <span class="sub-status-badge" id="sub-status-badge">—</span>
+            </div>
+            <div class="sub-status-main">
+                <span class="sub-status-dias" id="sub-status-dias">—</span>
+                <span class="sub-status-dias-label" id="sub-status-dias-label"></span>
+            </div>
+            <div class="sub-status-divider"></div>
+            <div class="sub-status-trafico">
+                <span class="sub-status-trafico-label" id="sub-status-trafico-label">Datos usados</span>
+                <span class="sub-status-trafico-valor" id="sub-status-trafico">—</span>
+            </div>
+        </div>
+
+        <div class="support-item" style="cursor: default;">
+            <span class="support-label" data-i18n="lbl-version">Versión de App</span>
+            <span class="support-value" id="app-version-text" style="color: #95a5a6;">Cargando...</span>
+        </div>
+
+        <div class="support-item" data-clipboard="05900ca5fcec8fe58b509961f5ed9c658a876c1308b9bfdd69e14effbd1ed13a0e">
+            <span class="support-label" data-i18n="lbl-sesion">ID de Sesión</span>
+            <span class="support-value" style="color: #7f8c8d;">05900ca5fcec8fe58b509961f5ed9c658a876c1308b9bfdd69e14effbd1ed13a0e</span>
+        </div>
+
+        <div class="support-item" data-clipboard="support@arrow-x.org">
+            <span class="support-label" data-i18n="lbl-centro">Centro de Ayuda</span>
+            <span class="support-value" style="color: #3498db;">support@arrow-x.org</span>
+        </div>
+
+        <button class="panel-btn-cerrar" id="btn-cerrar-soporte" data-i18n="btn-cerrar">Cerrar</button>
+    </div>
+
+    <div class="panel-flotante" id="panel-cuenta">
+        <h3 class="panel-title" data-i18n="panel-ajustes-tit">Ajustes</h3>
+
+        <button id="btn-abrir-credenciales" class="btn-credenciales" data-i18n="btn-cred">Mis Credenciales</button>
+        <button id="btn-cerrar-sesion" class="btn-logout" data-i18n="btn-logout">Cerrar Sesión</button>
+
+        <div class="setting-group" style="margin-bottom: 10px;">
+            <span class="setting-label-main" data-i18n="lbl-gen">General</span>
+
+            <div class="toggle-row" style="overflow: visible;">
+                <span class="setting-label" data-i18n="lbl-idioma">Idioma / Language</span>
+
+                <div class="custom-select" id="custom-idioma-select">
+                    <div class="select-trigger">
+                        <span id="select-trigger-text">Español</span>
+                        <span class="arrow">▼</span>
+                    </div>
+
+                    <div class="select-options">
+                        <div class="option selected" data-value="es">Español</div>
+                        <div class="option" data-value="en">English</div>
+                        <div class="option" data-value="ru">Русский</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="toggle-row">
+                <span class="setting-label" data-i18n="lbl-tray">Minimizar a la bandeja</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-tray">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="toggle-row">
+                <span class="setting-label" data-i18n="lbl-auto">Conexión automática</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-auto">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="setting-group" style="margin-bottom: 20px;">
+            <span class="setting-label-main" data-i18n="lbl-sec">Seguridad Avanzada</span>
+
+            <div class="toggle-row">
+                <span class="setting-label" style="color: #ff7675;" data-i18n="lbl-kill">Kill Switch (Bloqueo)</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-killswitch">
+                    <span class="slider killswitch-slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="panel-botones">
+            <button class="panel-btn-cerrar" id="btn-cerrar-cuenta" data-i18n="btn-volver">Volver</button>
+        </div>
+    </div>
+
+    <div class="panel-flotante" id="panel-credenciales">
+        <h3 class="panel-title" data-i18n="panel-cred-tit">Mis Credenciales</h3>
+        <p class="credenciales-subtitle" data-i18n="cred-sub">Haz clic para copiar al portapapeles</p>
+
+        <button id="btn-copiar-sub" class="btn-copiar-sub" data-i18n="btn-copiar-sub">Copiar Suscripción General</button>
+
+        <div class="setting-group credenciales-group">
+            <span class="setting-label-main" data-i18n="lbl-nodos-ind">Nodos VLESS (Individual)</span>
+            <div id="lista-vless-nodos" class="vless-list-container"></div>
+        </div>
+
+        <div class="panel-botones">
+            <button class="panel-btn-cerrar" id="btn-volver-ajustes" data-i18n="btn-volver-ajustes">Volver a Ajustes</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast-notificacion">✓ Copiado al portapapeles</div>
+
+</div>
+
+<script>
+    // ==========================================
+    // DICCIONARIO BILINGÜE
+    // ==========================================
+    const i18n = {
+        es: {
+            "login-sub": "Ingresa tus credenciales Stealth",
+            "login-uuid-ph": "ID de Usuario (UUID)",
+            "login-pass-ph": "Contraseña",
+            "btn-login": "Verificar Acceso",
+
+            "status-inactivo": "Protección Inactiva",
+            "status-iniciando-tun": "Iniciando modo TUN...",
+            "status-iniciando-proxy": "Iniciando modo Proxy...",
+            "status-deteniendo": "Deteniendo servicios...",
+
+            "btn-conectar": "CONECTAR",
+            "btn-desconectar": "DESCONECTAR",
+
+            "ubi-actual": "Ubicación Actual",
+            "cargando-nodos": "Cargando Nodos...",
+
+            "panel-soporte-tit": "Soporte Técnico",
+            "lbl-version": "Versión de App",
+            "lbl-sesion": "ID de Sesión",
+            "lbl-centro": "Centro de Ayuda",
+            "btn-cerrar": "Cerrar",
+
+            "panel-ajustes-tit": "Ajustes",
+            "btn-cred": "Mis Credenciales",
+            "btn-logout": "Cerrar Sesión",
+            "lbl-gen": "General",
+            "lbl-idioma": "Idioma / Language",
+            "lbl-tray": "Minimizar a la bandeja",
+            "lbl-auto": "Conexión automática",
+            "lbl-sec": "Seguridad Avanzada",
+            "lbl-kill": "Kill Switch (Bloqueo)",
+            "btn-volver": "Volver",
+
+            "panel-cred-tit": "Mis Credenciales",
+            "cred-sub": "Haz clic para copiar al portapapeles",
+            "btn-copiar-sub": "Copiar Suscripción General",
+            "lbl-nodos-ind": "Nodos VLESS (Individual)",
+            "btn-volver-ajustes": "Volver a Ajustes",
+
+            "msg-ajustes": "✓ Ajustes actualizados",
+            "msg-copiado": "✓ Copiado al portapapeles",
+            "msg-error-nodo": "⚠️ Error: No hay servidor seleccionado",
+            "msg-vpn-activa": "VPN Activa",
+            "msg-proxy-activo": "Proxy Activo",
+            "msg-conectando": "CONECTANDO...",
+            "msg-apagando": "APAGANDO...",
+            "msg-sesion-iniciada": "✓ Sesión iniciada",
+            "msg-desconectado": "Desconectado",
+            "msg-conexion-establecida": "✓ Conexión establecida",
+            "msg-verificando": "Verificando...",
+            "msg-autenticando": "Autenticando...",
+
+            "msg-disconnect-mode": "Desconéctate para cambiar de modo",
+            "msg-disconnect-server": "Desconéctate para cambiar de servidor",
+            "live-latency": "Latencia en vivo",
+            "offline": "Fuera de servicio",
+            "login-all-data": "Ingresa todos los datos",
+            "copy-link": "Copiar Enlace",
+            "msg-vless-copied": "✓ VLESS de {name} copiado",
+            "country-us-short": "EE. UU.",
+            "proxy-tooltip": "Ideal para redes bloqueadas o Wi-Fi público estricto",
+
+            "onb-title": "Activar Arrow VPN",
+            "onb-sub": "Pega tu enlace de suscripción para comenzar",
+            "onb-url-ph": "https://arrow-x.org/sub/...",
+            "btn-activar": "Activar",
+            "onb-hint": "¿No tienes un enlace? Consíguelo en arrow-x.org",
+            "onb-empty": "Pega tu enlace de suscripción",
+            "onb-activando": "Activando...",
+            "msg-sub-activada": "Suscripción activada",
+            "dias-restantes": "días restantes",
+            "sub-sin-limite": "Sin límite de tiempo",
+            "sub-expirada-ui": "Suscripción expirada",
+            "sub-estado-activa": "Activa",
+            "sub-estado-pronto": "Expira pronto",
+            "sub-estado-expirada": "Expirada",
+            "sub-estado-ilimitada": "Ilimitada",
+            "sub-dias": "días",
+            "sub-dia": "día",
+            "sub-hora": "hora",
+            "sub-horas": "horas",
+            "sub-trafico-usado": "usado",
+            "sub-tiempo-restante": "Tiempo restante",
+            "sub-trafico-label": "Datos usados"
+        },
+
+        en: {
+            "login-sub": "Enter your Stealth credentials",
+            "login-uuid-ph": "User ID (UUID)",
+            "login-pass-ph": "Password",
+            "btn-login": "Verify Access",
+
+            "status-inactivo": "Protection Inactive",
+            "status-iniciando-tun": "Starting TUN mode...",
+            "status-iniciando-proxy": "Starting Proxy mode...",
+            "status-deteniendo": "Stopping services...",
+
+            "btn-conectar": "CONNECT",
+            "btn-desconectar": "DISCONNECT",
+
+            "ubi-actual": "Current Location",
+            "cargando-nodos": "Loading Nodes...",
+
+            "panel-soporte-tit": "Technical Support",
+            "lbl-version": "App Version",
+            "lbl-sesion": "Session ID",
+            "lbl-centro": "Help Center",
+            "btn-cerrar": "Close",
+
+            "panel-ajustes-tit": "Settings",
+            "btn-cred": "My Credentials",
+            "btn-logout": "Log Out",
+            "lbl-gen": "General",
+            "lbl-idioma": "Language / Idioma",
+            "lbl-tray": "Minimize to tray",
+            "lbl-auto": "Auto-connect",
+            "lbl-sec": "Advanced Security",
+            "lbl-kill": "Kill Switch (Block)",
+            "btn-volver": "Back",
+
+            "panel-cred-tit": "My Credentials",
+            "cred-sub": "Click to copy to clipboard",
+            "btn-copiar-sub": "Copy General Subscription",
+            "lbl-nodos-ind": "VLESS Nodes (Individual)",
+            "btn-volver-ajustes": "Back to Settings",
+
+            "msg-ajustes": "✓ Settings updated",
+            "msg-copiado": "✓ Copied to clipboard",
+            "msg-error-nodo": "⚠️ Error: No server selected",
+            "msg-vpn-activa": "VPN Active",
+            "msg-proxy-activo": "Proxy Active",
+            "msg-conectando": "CONNECTING...",
+            "msg-apagando": "DISCONNECTING...",
+            "msg-sesion-iniciada": "✓ Logged in successfully",
+            "msg-desconectado": "Disconnected",
+            "msg-conexion-establecida": "✓ Connection established",
+            "msg-verificando": "Verifying...",
+            "msg-autenticando": "Authenticating...",
+
+            "msg-disconnect-mode": "Disconnect to switch modes",
+            "msg-disconnect-server": "Disconnect to change servers",
+            "live-latency": "Live Latency",
+            "offline": "Offline",
+            "login-all-data": "Enter all data",
+            "copy-link": "Copy Link",
+            "msg-vless-copied": "✓ {name} VLESS copied",
+            "country-us-short": "USA",
+            "proxy-tooltip": "Ideal for blocked networks or strict public Wi-Fi",
+
+            "onb-title": "Activate Arrow VPN",
+            "onb-sub": "Paste your subscription link to begin",
+            "onb-url-ph": "https://arrow-x.org/sub/...",
+            "btn-activar": "Activate",
+            "onb-hint": "Don't have a link? Get one at arrow-x.org",
+            "onb-empty": "Paste your subscription link",
+            "onb-activando": "Activating...",
+            "msg-sub-activada": "Subscription activated",
+            "dias-restantes": "days left",
+            "sub-sin-limite": "No time limit",
+            "sub-expirada-ui": "Subscription expired",
+            "sub-estado-activa": "Active",
+            "sub-estado-pronto": "Expiring soon",
+            "sub-estado-expirada": "Expired",
+            "sub-estado-ilimitada": "Unlimited",
+            "sub-dias": "days",
+            "sub-dia": "day",
+            "sub-hora": "hour",
+            "sub-horas": "hours",
+            "sub-trafico-usado": "used",
+            "sub-tiempo-restante": "Time remaining",
+            "sub-trafico-label": "Data used"
+        },
+
+        ru: {
+            "login-sub": "Введите ваши Stealth-данные",
+            "login-uuid-ph": "ID пользователя (UUID)",
+            "login-pass-ph": "Пароль",
+            "btn-login": "Проверить доступ",
+
+            "status-inactivo": "Защита неактивна",
+            "status-iniciando-tun": "Запуск режима TUN...",
+            "status-iniciando-proxy": "Запуск режима прокси...",
+            "status-deteniendo": "Остановка служб...",
+
+            "btn-conectar": "ПОДКЛЮЧИТЬСЯ",
+            "btn-desconectar": "ОТКЛЮЧИТЬСЯ",
+
+            "ubi-actual": "Текущее местоположение",
+            "cargando-nodos": "Загрузка узлов...",
+
+            "panel-soporte-tit": "Техническая поддержка",
+            "lbl-version": "Версия приложения",
+            "lbl-sesion": "ID Session Messenger",
+            "lbl-centro": "Центр помощи",
+            "btn-cerrar": "Закрыть",
+
+            "panel-ajustes-tit": "Настройки",
+            "btn-cred": "Мои данные",
+            "btn-logout": "Выйти",
+            "lbl-gen": "Общие",
+            "lbl-idioma": "Язык / Language",
+            "lbl-tray": "Сворачивать в трей",
+            "lbl-auto": "Автоподключение",
+            "lbl-sec": "Расширенная безопасность",
+            "lbl-kill": "Kill Switch (Блокировка)",
+            "btn-volver": "Назад",
+
+            "panel-cred-tit": "Мои данные",
+            "cred-sub": "Нажмите, чтобы скопировать в буфер обмена",
+            "btn-copiar-sub": "Скопировать общую подписку",
+            "lbl-nodos-ind": "Узлы VLESS (по отдельности)",
+            "btn-volver-ajustes": "Назад к настройкам",
+
+            "msg-ajustes": "✓ Настройки обновлены",
+            "msg-copiado": "✓ Скопировано в буфер обмена",
+            "msg-error-nodo": "⚠️ Ошибка: сервер не выбран",
+            "msg-vpn-activa": "VPN активна",
+            "msg-proxy-activo": "Прокси активен",
+            "msg-conectando": "ПОДКЛЮЧЕНИЕ...",
+            "msg-apagando": "ОТКЛЮЧЕНИЕ...",
+            "msg-sesion-iniciada": "✓ Вход выполнен",
+            "msg-desconectado": "Отключено",
+            "msg-conexion-establecida": "✓ Соединение установлено",
+            "msg-verificando": "Проверка...",
+            "msg-autenticando": "Аутентификация...",
+
+            "msg-disconnect-mode": "Отключитесь, чтобы сменить режим",
+            "msg-disconnect-server": "Отключитесь, чтобы сменить сервер",
+            "live-latency": "Задержка в реальном времени",
+            "offline": "Недоступен",
+            "login-all-data": "Введите все данные",
+            "copy-link": "Скопировать ссылку",
+            "msg-vless-copied": "✓ VLESS {name} скопирован",
+            "country-us-short": "США",
+            "proxy-tooltip": "Подходит для заблокированных сетей или строгого публичного Wi-Fi",
+
+            "onb-title": "Активировать Arrow VPN",
+            "onb-sub": "Вставьте ссылку на подписку, чтобы начать",
+            "onb-url-ph": "https://arrow-x.org/sub/...",
+            "btn-activar": "Активировать",
+            "onb-hint": "Нет ссылки? Получите её на arrow-x.org",
+            "onb-empty": "Вставьте ссылку на подписку",
+            "onb-activando": "Активация...",
+            "msg-sub-activada": "Подписка активирована",
+            "dias-restantes": "дней осталось",
+            "sub-sin-limite": "Без ограничения по времени",
+            "sub-expirada-ui": "Подписка истекла",
+            "sub-estado-activa": "Активна",
+            "sub-estado-pronto": "Скоро истечёт",
+            "sub-estado-expirada": "Истекла",
+            "sub-estado-ilimitada": "Безлимит",
+            "sub-dias": "дней",
+            "sub-dia": "день",
+            "sub-hora": "час",
+            "sub-horas": "часов",
+            "sub-trafico-usado": "использовано",
+            "sub-tiempo-restante": "Осталось времени",
+            "sub-trafico-label": "Использовано данных"
+        }
+    };
+
+    let currentLangValue = 'es';
+
+    function t(key, params) {
+        let str = (i18n[currentLangValue] && i18n[currentLangValue][key]) || i18n.es[key] || key;
+
+        if (params) {
+            Object.keys(params).forEach(k => {
+                str = str.split('{' + k + '}').join(params[k]);
+            });
+        }
+
+        return str;
+    }
+
+    // ==========================================
+    // TRADUCTOR AUTOMÁTICO DE PAÍSES
+    // ==========================================
+    function obtenerNombrePaisTraducido(codigoIso, nombreOriginalBackend) {
+        if (!codigoIso || codigoIso.toUpperCase() === "UN") {
+            return nombreOriginalBackend;
+        }
+
+        // Si el remark del servidor tiene contenido "especial" (corchetes,
+        // paréntesis, palabras que no son solo el nombre del país), respetamos
+        // el remark del backend en lugar de traducir por código ISO.
+        // Ejemplos que NO se traducen:
+        //   "Germany [LTE] Белые списки"  → se queda tal cual
+        //   "Netherlands (Premium)"        → se queda tal cual
+        //   "USA #2"                       → se queda tal cual
+        // Ejemplos que SÍ se traducen al idioma:
+        //   "Germany"                      → "Alemania" en es
+        //   "Netherlands"                  → "Países Bajos" en es
+        const nombreBackend = (nombreOriginalBackend || '').trim();
+        const tieneContenidoEspecial = /[\[\]\(\)#\/]|[А-Яа-я]/.test(nombreBackend);
+
+        if (tieneContenidoEspecial) {
+            return nombreBackend;
+        }
+
+        try {
+            const traductor = new Intl.DisplayNames([currentLangValue], { type: 'region' });
+            let nombreTraducido = traductor.of(codigoIso.toUpperCase());
+
+            if (codigoIso.toUpperCase() === 'US') {
+                return t('country-us-short');
+            }
+
+            return nombreTraducido.charAt(0).toUpperCase() + nombreTraducido.slice(1);
+        } catch (e) {
+            return nombreOriginalBackend;
+        }
+    }
+
+    function obtenerTextoInicioConexion() {
+        return modoConexionActual === 'vpn'
+            ? t('status-iniciando-tun')
+            : t('status-iniciando-proxy');
+    }
+
+    function cambiarIdiomaUI(lang) {
+        currentLangValue = lang;
+        document.documentElement.lang = lang;
+        const textos = i18n[lang];
+
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+
+            if (textos[key]) {
+                if (el.tagName === 'INPUT' && el.hasAttribute('placeholder')) {
+                    el.placeholder = textos[key];
+                } else {
+                    el.innerText = textos[key];
+                }
+            }
+        });
+
+        document.querySelectorAll('[data-i18n-title]').forEach(el => {
+            const key = el.getAttribute('data-i18n-title');
+            if (textos[key]) {
+                el.title = textos[key];
+            }
+        });
+
+        if (estaConectando) {
+            btnTexto.innerText = t('msg-conectando');
+            statusTextTop.innerText = obtenerTextoInicioConexion();
+        } else if (estaDesconectando) {
+            btnTexto.innerText = t('msg-apagando');
+            statusTextTop.innerText = t('status-deteniendo');
+        } else if (estaConectado) {
+            btnTexto.innerText = t('btn-desconectar');
+            statusTextTop.innerText = modoConexionActual === 'vpn'
+                ? t('msg-vpn-activa')
+                : t('msg-proxy-activo');
+        } else {
+            btnTexto.innerText = t('btn-conectar');
+            statusTextTop.innerText = t('status-inactivo');
+        }
+
+        if (Object.keys(servidoresDisponibles).length > 0) {
+            renderizarMenuServidores();
+            actualizarBotonServidorUI();
+
+            const panelCredencialesTemp = document.getElementById('panel-credenciales');
+            if (panelCredencialesTemp.classList.contains('abierto')) {
+                renderizarListaVless();
+            }
+        }
+
+        // Repintar la tarjeta de suscripción con el idioma nuevo
+        actualizarInfoSuscripcion(expiraSubUI, traficoSubUI);
+    }
+
+    let estaConectado = false;
+    let estaConectando = false;
+    let estaDesconectando = false;
+    let modoConexionActual = 'vpn';
+    let servidoresDisponibles = {};
+    let mapaBanderas = {};  // { 'nl': 'C:\\Users\\...\\banderas\\nl.svg', ... }
+    let servidorSeleccionado = '';
+    let currentUserUuid = '';
+
+    // Estado de suscripción en memoria (para repintar al cambiar idioma)
+    let expiraSubUI = 0;
+    let traficoSubUI = { upload: 0, download: 0, total: 0 };
+
+    let datosRadar = {};
+    let isPinging = false;
+    let radarInterval = null;
+    let timeoutConexionId = null;
+
+    const pantallaLogin = document.getElementById('pantalla-login');
+    const inputSubUrl = document.getElementById('onb-suburl');
+    const btnActivar = document.getElementById('btn-activar');
+    const txtErrorOnb = document.getElementById('onb-error');
+    const btnCerrarSesion = document.getElementById('btn-cerrar-sesion');
+
+    const toggleTray = document.getElementById('toggle-tray');
+    const toggleAuto = document.getElementById('toggle-auto');
+    const toggleKillswitch = document.getElementById('toggle-killswitch');
+    const toast = document.getElementById('toast-notificacion');
+    const menuServidores = document.getElementById('menu-servidores');
+    const btnAbrirServidores = document.getElementById('btn-abrir-servidores');
+    const btnModoVpn = document.getElementById('btn-modo-vpn');
+    const btnModoProxy = document.getElementById('btn-modo-proxy');
+
+    const btnConectar = document.getElementById('btn-conectar');
+    const statusTextTop = document.getElementById('main-status-text');
+    const btnTexto = document.getElementById('btn-conectar-text');
+
+    // ==========================================
+    // LÓGICA DEL CUSTOM SELECT
+    // ==========================================
+    // ==========================================
+    // SELECTOR DE IDIOMA (login + ajustes)
+    // ==========================================
+    // Ambos selectores comparten estado: cambiar uno actualiza el otro
+    // y persiste la elección. La lista permite registrar N selectores
+    // sin duplicar lógica.
+    // ==========================================
+    const selectoresIdioma = [
+        {
+            container: document.getElementById('custom-idioma-select'),
+            triggerText: document.getElementById('select-trigger-text'),
+            esAjustes: true
+        },
+        {
+            container: document.getElementById('custom-idioma-select-login'),
+            triggerText: document.getElementById('select-trigger-text-login'),
+            esAjustes: false
+        }
+    ];
+
+    function sincronizarSelectoresIdioma(lang) {
+        selectoresIdioma.forEach(sel => {
+            if (!sel.container) return;
+
+            const opciones = sel.container.querySelectorAll('.option');
+            opciones.forEach(opt => {
+                const esActual = opt.getAttribute('data-value') === lang;
+                opt.classList.toggle('selected', esActual);
+
+                if (esActual) {
+                    sel.triggerText.innerText = opt.innerText;
+                }
+            });
+        });
+    }
+
+    selectoresIdioma.forEach(sel => {
+        if (!sel.container) return;
+
+        const trigger = sel.container.querySelector('.select-trigger');
+        const opciones = sel.container.querySelectorAll('.option');
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // Cerrar otros selectores antes de abrir éste
+            selectoresIdioma.forEach(otro => {
+                if (otro !== sel && otro.container) {
+                    otro.container.classList.remove('open');
+                }
+            });
+
+            sel.container.classList.toggle('open');
+        });
+
+        opciones.forEach(opt => {
+            opt.addEventListener('click', () => {
+                const val = opt.getAttribute('data-value');
+
+                sel.container.classList.remove('open');
+
+                if (currentLangValue !== val) {
+                    cambiarIdiomaUI(val);
+                    sincronizarSelectoresIdioma(val);
+
+                    // Si el cambio vino del selector de ajustes,
+                    // mostramos el toast de confirmación.
+                    // Si vino del login, solo persistimos en silencio.
+                    aplicarGuardado(sel.esAjustes);
+                }
+            });
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        selectoresIdioma.forEach(sel => {
+            if (sel.container && !sel.container.contains(e.target)) {
+                sel.container.classList.remove('open');
+            }
+        });
+    });
+
+    function aplicarGuardado(mostrarAviso = true) {
+        window.apiVPN.enviar('save-settings', {
+            tray: toggleTray.checked,
+            autoConnect: toggleAuto.checked,
+            killSwitch: toggleKillswitch.checked,
+            connectionMode: modoConexionActual,
+            idioma: currentLangValue
+        });
+
+        if (mostrarAviso) {
+            mostrarMensaje(t('msg-ajustes'));
+        }
+    }
+
+    function actualizarModoVisual(modo, guardar = true) {
+        if (estaConectado || estaConectando) {
+            mostrarMensaje("⚠️ " + t('msg-disconnect-mode'), true);
+            return;
+        }
+
+        modoConexionActual = modo;
+
+        if (modo === 'vpn') {
+            btnModoVpn.classList.add('active');
+            btnModoProxy.classList.remove('active');
+        } else {
+            btnModoProxy.classList.add('active');
+            btnModoVpn.classList.remove('active');
+        }
+
+        if (guardar) {
+            aplicarGuardado(false);
+        }
+    }
+
+    btnModoVpn.addEventListener('click', () => actualizarModoVisual('vpn'));
+    btnModoProxy.addEventListener('click', () => actualizarModoVisual('proxy'));
+
+    function gestionarRadar(activar) {
+        if (activar) {
+            if (!radarInterval) {
+                consultarRadar();
+                radarInterval = setInterval(consultarRadar, 10000);
+            }
+        } else {
+            if (radarInterval) {
+                clearInterval(radarInterval);
+                radarInterval = null;
+            }
+        }
+    }
+
+    function renderizarMenuServidores() {
+        const claseSpin = isPinging ? 'spin-anim' : '';
+        const txtLatencia = t('live-latency');
+
+        menuServidores.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding: 4px 5px 0 5px;">
+                <span style="font-size: 11px; color: #7f8c8d; font-weight: 600; text-transform: uppercase;">${txtLatencia}</span>
+                <button id="btn-recargar-ping" class="btn-recargar ${claseSpin}" title="Ping">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 -960 960 960" width="18px" fill="#7f8c8d"><path d="M480-160q-133 0-226.5-93.5T160-480q0-133 93.5-226.5T480-800q85 0 149 34.5T740-671v-129h80v254H566v-80h130q-42-61-101.5-98T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q81 0 143-48t90-122h82q-32 108-115 179t-200 71Z"/></svg>
+                </button>
+            </div>
+        `;
+
+        let llavesActivas = Object.keys(servidoresDisponibles);
+
+        llavesActivas.sort((a, b) => {
+            const isoA = servidoresDisponibles[a].iso || "UN";
+            const isoB = servidoresDisponibles[b].iso || "UN";
+
+            const nomA = obtenerNombrePaisTraducido(isoA, servidoresDisponibles[a].nombre);
+            const nomB = obtenerNombrePaisTraducido(isoB, servidoresDisponibles[b].nombre);
+
+            return nomA.localeCompare(nomB);
+        });
+
+        if (!servidorSeleccionado || !servidoresDisponibles[servidorSeleccionado]) {
+            servidorSeleccionado = llavesActivas.length > 0 ? llavesActivas[0] : null;
+        }
+
+        if (!servidorSeleccionado) return;
+
+        llavesActivas.forEach(idPais => {
+            const dataServidor = servidoresDisponibles[idPais];
+            const telemetria = datosRadar[idPais] || { estado: "...", ping: 0 };
+
+            const isoCode = dataServidor.iso || "UN";
+            const nombreTraducido = obtenerNombrePaisTraducido(isoCode, dataServidor.nombre);
+
+            let claseColor = 'dot-mantenimiento';
+            let textoPing = telemetria.ping > 0 ? `${telemetria.ping} ms` : "...";
+            let estaDeshabilitado = false;
+
+            if (telemetria.ping > 0 && telemetria.ping <= 199) {
+                claseColor = 'dot-activo';
+            } else if (telemetria.ping >= 200 && telemetria.ping <= 800) {
+                claseColor = 'dot-mantenimiento';
+            } else if (
+                telemetria.ping > 800 ||
+                telemetria.ping === -1 ||
+                ["down", "url_error", "timeout"].includes(telemetria.estado)
+            ) {
+                claseColor = 'dot-apagado';
+                textoPing = t('offline');
+                estaDeshabilitado = true;
+            }
+
+            const btn = document.createElement('button');
+            btn.className = `server-option ${estaDeshabilitado ? 'disabled' : ''}`;
+
+            btn.innerHTML = `
+                <div class="server-info">
+                    ${htmlBandera(isoCode, nombreTraducido, 'bandera')}
+                    <div style="display: flex; flex-direction: column; text-align: left; margin-left: 5px;">
+                        <span>${nombreTraducido}</span>
+                        <span style="font-size: 10px; color: ${estaDeshabilitado ? '#e74c3c' : '#7f8c8d'}; margin-top: 2px; font-weight: normal;">
+                            ${textoPing}
+                        </span>
+                    </div>
+                </div>
+                <div class="status-dot ${claseColor}">
+
+</div>
+            `;
+
+            if (!estaDeshabilitado) {
+                btn.addEventListener('click', () => {
+                    servidorSeleccionado = idPais;
+                    actualizarBotonServidorUI();
+                    menuServidores.classList.remove('abierto');
+                    gestionarRadar(false);
+                });
+            }
+
+            menuServidores.appendChild(btn);
+        });
+
+        document.getElementById('btn-recargar-ping').addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            if (isPinging) return;
+
+            isPinging = true;
+
+            Object.keys(servidoresDisponibles).forEach(id => {
+                datosRadar[id] = { estado: "...", ping: 0 };
+            });
+
+            renderizarMenuServidores();
+
+            window.apiVPN.enviar('ping-servers', servidoresDisponibles);
+        });
+
+        actualizarBotonServidorUI();
+    }
+
+    function rutaBandera(iso) {
+        const key = String(iso || '').toLowerCase();
+        const ruta = mapaBanderas[key];
+        if (ruta) {
+            // file:// con barras normalizadas para Windows
+            return 'file:///' + ruta.replace(/\\/g, '/');
+        }
+        return null;
+    }
+
+    function htmlBandera(iso, nombre, clase = 'vless-flag') {
+        const ruta = rutaBandera(iso);
+        if (ruta) {
+            return `<img src="${ruta}" class="${clase}" alt="${iso}"
+                 onerror="this.replaceWith(placeholderBandera('${iso}'))">`;
+        }
+        // Placeholder: círculo con el ISO
+        return `<span class="flag-placeholder">${String(iso || 'UN').toUpperCase()}</span>`;
+    }
+
+    // Para el onerror (cuando el file:// falla en runtime)
+    window.placeholderBandera = function(iso) {
+        const span = document.createElement('span');
+        span.className = 'flag-placeholder';
+        span.textContent = String(iso || 'UN').toUpperCase();
+        return span;
+    };
+
+    function actualizarInfoSuscripcion(expira, trafico) {
+        // Guardar en memoria para poder repintar al cambiar idioma
+        expiraSubUI = expira || 0;
+        traficoSubUI = trafico || { upload: 0, download: 0, total: 0 };
+
+        const badge = document.getElementById('sub-status-badge');
+        const diasNum = document.getElementById('sub-status-dias');
+        const diasLbl = document.getElementById('sub-status-dias-label');
+        const card = document.getElementById('sub-status-card');
+        const traficoTxt = document.getElementById('sub-status-trafico');
+
+        if (!card) return;
+
+        card.classList.remove('estado-activa', 'estado-pronto', 'estado-expirada', 'estado-ilimitada');
+
+        // --- Tiempo ---
+        if (!expira || expira === 0) {
+            // Sin límite de tiempo
+            card.classList.add('estado-ilimitada');
+            badge.innerText = t('sub-estado-ilimitada');
+            diasNum.innerText = '∞';
+            diasLbl.innerText = '';
+        } else {
+            const ahora = Math.floor(Date.now() / 1000);
+            const seg = expira - ahora;
+
+            if (seg <= 0) {
+                // Expirada
+                card.classList.add('estado-expirada');
+                badge.innerText = t('sub-estado-expirada');
+                diasNum.innerText = '0';
+                diasLbl.innerText = t('sub-dias');
+            } else if (seg < 86400) {
+                // Menos de 24h: mostrar horas, estado "expira pronto"
+                const horas = Math.max(1, Math.ceil(seg / 3600));
+                card.classList.add('estado-pronto');
+                badge.innerText = t('sub-estado-pronto');
+                diasNum.innerText = String(horas);
+                diasLbl.innerText = horas === 1 ? t('sub-hora') : t('sub-horas');
+            } else {
+                // Días restantes
+                const dias = Math.ceil(seg / 86400);
+
+                if (dias <= 3) {
+                    card.classList.add('estado-pronto');
+                    badge.innerText = t('sub-estado-pronto');
+                } else {
+                    card.classList.add('estado-activa');
+                    badge.innerText = t('sub-estado-activa');
+                }
+
+                diasNum.innerText = String(dias);
+                diasLbl.innerText = dias === 1 ? t('sub-dia') : t('sub-dias');
+            }
+        }
+
+        // --- Etiquetas traducibles ---
+        const tiempoLabel = document.getElementById('sub-status-tiempo-label');
+        const traficoLabel = document.getElementById('sub-status-trafico-label');
+        if (tiempoLabel) tiempoLabel.innerText = t('sub-tiempo-restante');
+        if (traficoLabel) traficoLabel.innerText = t('sub-trafico-label');
+
+        // --- Tráfico ---
+        if (trafico) {
+            const gbBajados = (trafico.download / 1e9).toFixed(2);
+            if (trafico.total && trafico.total > 0) {
+                const gbTotal = (trafico.total / 1e9).toFixed(0);
+                traficoTxt.innerText = `${gbBajados} / ${gbTotal} GB`;
+            } else {
+                traficoTxt.innerText = `${gbBajados} GB`;
+            }
+        } else {
+            traficoTxt.innerText = '—';
+        }
+    }
+
+    function actualizarBotonServidorUI() {
+        if (!servidorSeleccionado || !servidoresDisponibles[servidorSeleccionado]) return;
+
+        const dataServidor = servidoresDisponibles[servidorSeleccionado];
+        const isoCode = dataServidor.iso || "UN";
+        const nombreTraducido = obtenerNombrePaisTraducido(isoCode, dataServidor.nombre);
+
+        document.getElementById('info-servidor-actual').innerHTML = `
+            ${htmlBandera(isoCode, nombreTraducido, 'bandera')} ${nombreTraducido}`;
+    }
+
+    function consultarRadar() {
+        if (Object.keys(servidoresDisponibles).length === 0) return;
+
+        window.apiVPN.enviar('ping-servers', servidoresDisponibles);
+    }
+
+    window.apiVPN.recibir('ping-results', (resultados) => {
+        datosRadar = resultados;
+        isPinging = false;
+        renderizarMenuServidores();
+    });
+
+    window.apiVPN.recibir('banderas-listas', (mapa) => {
+        mapaBanderas = mapa || {};
+        // Re-renderizar para que aparezcan las banderas ya descargadas
+        renderizarMenuServidores();
+        if (document.getElementById('panel-credenciales').classList.contains('abierto')) {
+            renderizarListaVless();
+        }
+    });
+
+    btnAbrirServidores.addEventListener('click', () => {
+        if (estaConectado || estaConectando) {
+            mostrarMensaje("⚠️ " + t('msg-disconnect-server'), true);
+            return;
+        }
+
+        const menuAbierto = menuServidores.classList.toggle('abierto');
+        gestionarRadar(menuAbierto);
+    });
+
+    document.addEventListener('click', (evento) => {
+        if (!btnAbrirServidores.contains(evento.target) && !menuServidores.contains(evento.target)) {
+            if (menuServidores.classList.contains('abierto')) {
+                menuServidores.classList.remove('abierto');
+                gestionarRadar(false);
+            }
+        }
+    });
+
+    btnActivar.addEventListener('click', () => {
+        const subUrl = inputSubUrl.value.trim();
+
+        if (!subUrl) {
+            txtErrorOnb.innerText = t('onb-empty');
+            return;
+        }
+
+        txtErrorOnb.innerText = "";
+        btnActivar.innerText = t('onb-activando');
+        btnActivar.classList.add('cargando');
+
+        window.apiVPN.enviar('activar-suscripcion', { subUrl });
+    });
+
+    // Permitir activar con Enter
+    inputSubUrl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') btnActivar.click();
+    });
+
+    window.apiVPN.recibir('suscripcion-exito', (data) => {
+        btnActivar.innerText = t('btn-activar');
+        btnActivar.classList.remove('cargando');
+
+        servidoresDisponibles = data.servidores;
+        const isos = Object.values(servidoresDisponibles)
+            .map(s => s.iso)
+            .filter(Boolean);
+        window.apiVPN.enviar('sincronizar-banderas', isos);
+        servidorSeleccionado = '';  // o leer ultimoServidor si lo guardaste
+
+        renderizarMenuServidores();
+        actualizarInfoSuscripcion(data.expira, data.trafico);
+
+        pantallaLogin.classList.add('oculta');
+
+        mostrarMensaje(t('msg-sub-activada'));
+    });
+
+    window.apiVPN.recibir('suscripcion-error', (msg) => {
+        btnActivar.innerText = t('btn-activar');
+        btnActivar.classList.remove('cargando');
+        txtErrorOnb.innerText = msg;
+    });
+
+    // Refresh silencioso: actualiza servidores y expiración sin cambiar pantalla
+    window.apiVPN.recibir('suscripcion-refrescada', (data) => {
+        servidoresDisponibles = data.servidores;
+        const isos = Object.values(servidoresDisponibles)
+            .map(s => s.iso)
+            .filter(Boolean);
+        window.apiVPN.enviar('sincronizar-banderas', isos);
+        renderizarMenuServidores();
+        actualizarInfoSuscripcion(data.expira, data.trafico);
+
+        // Si la suscripción ya expiró, podrías volver al onboarding:
+        if (data.expira && data.expira > 0) {
+            const ahora = Math.floor(Date.now() / 1000);
+            if (ahora >= data.expira) {
+                mostrarMensaje(t('sub-expirada-ui'), true);
+            }
+        }
+    });
+
+    btnCerrarSesion.addEventListener('click', () => {
+        if (estaConectado || estaConectando) {
+            window.apiVPN.enviar('desconectar-vpn');
+            forzarDesconexionUI();
+        }
+
+        window.apiVPN.enviar('borrar-suscripcion');
+
+        pantallaLogin.classList.remove('oculta');
+
+        inputSubUrl.value = '';
+        txtErrorOnb.innerText = '';
+
+        servidoresDisponibles = {};
+
+        cerrarPaneles();
+        gestionarRadar(false);
+    });
+
+    window.apiVPN.enviar('get-settings');
+    window.apiVPN.enviar('get-app-version');
+
+    window.apiVPN.recibir('app-version', (version) => {
+        document.getElementById('app-version-text').innerText = "v" + version;
+    });
+
+    window.apiVPN.recibir('update-status', (msg) => {
+        mostrarMensaje(msg);
+    });
+
+    window.apiVPN.recibir('app-toast', (msg) => {
+        mostrarMensaje(msg);
+    });
+
+    window.apiVPN.recibir('load-settings', (settings) => {
+        toggleTray.checked = settings.tray;
+        toggleAuto.checked = settings.autoConnect;
+        toggleKillswitch.checked = settings.killSwitch;
+
+        if (settings.idioma) {
+            currentLangValue = settings.idioma;
+            cambiarIdiomaUI(settings.idioma);
+            sincronizarSelectoresIdioma(settings.idioma);
+        }
+
+        actualizarModoVisual(settings.connectionMode || 'vpn', false);
+
+        // Si ya hay una suscripción activada, saltamos el onboarding
+// y refrescamos en background.
+        if (settings.servidores && Object.keys(settings.servidores).length > 0) {
+            servidoresDisponibles = settings.servidores;
+            const isos = Object.values(servidoresDisponibles)
+                .map(s => s.iso)
+                .filter(Boolean);
+            window.apiVPN.enviar('sincronizar-banderas', isos);
+            servidorSeleccionado = settings.ultimoServidor || '';
+
+            renderizarMenuServidores();
+            actualizarInfoSuscripcion(settings.expiraSub, settings.traficoSub);
+
+            pantallaLogin.classList.add('oculta');
+
+            // Refrescar el sub silenciosamente (por si añadiste nodos
+            // o cambió la expiración). No bloquea la UI.
+            window.apiVPN.enviar('refrescar-suscripcion');
+        }
+    });
+
+    [toggleTray, toggleAuto, toggleKillswitch].forEach(toggle => {
+        toggle.addEventListener('change', () => aplicarGuardado(true));
+    });
+
+    function mostrarMensaje(texto, esError = false) {
+        toast.innerText = texto;
+        toast.style.background = esError ? "#e74c3c" : "#2ecc71";
+        toast.classList.add('visible');
+
+        setTimeout(() => {
+            toast.classList.remove('visible');
+        }, 3000);
+    }
+
+    const btnAyuda = document.getElementById('btn-ayuda');
+    const btnAjustes = document.getElementById('btn-ajustes');
+    const overlay = document.getElementById('overlay-menus');
+    const panelSoporte = document.getElementById('panel-soporte');
+    const panelCuenta = document.getElementById('panel-cuenta');
+    const btnCerrarSoporte = document.getElementById('btn-cerrar-soporte');
+    const btnCerrarCuenta = document.getElementById('btn-cerrar-cuenta');
+
+    function abrirPanel(panel) {
+        overlay.classList.add('activo');
+        panel.classList.add('abierto');
+    }
+
+    function cerrarPaneles() {
+        overlay.classList.remove('activo');
+        panelSoporte.classList.remove('abierto');
+        panelCuenta.classList.remove('abierto');
+        panelCredenciales.classList.remove('abierto');
+    }
+
+    btnAyuda.addEventListener('click', () => abrirPanel(panelSoporte));
+    btnAjustes.addEventListener('click', () => abrirPanel(panelCuenta));
+    btnCerrarSoporte.addEventListener('click', cerrarPaneles);
+    btnCerrarCuenta.addEventListener('click', cerrarPaneles);
+    overlay.addEventListener('click', cerrarPaneles);
+
+    document.querySelectorAll('.support-item[data-clipboard]').forEach(item => {
+        item.addEventListener('click', () => {
+            navigator.clipboard.writeText(item.getAttribute('data-clipboard')).then(() => {
+                mostrarMensaje(t('msg-copiado'));
+            });
+        });
+    });
+
+    btnConectar.addEventListener('click', () => {
+        if (menuServidores.classList.contains('abierto')) {
+            menuServidores.classList.remove('abierto');
+            gestionarRadar(false);
+        }
+
+        if (estaConectando || estaDesconectando) return;
+
+        if (!estaConectado) {
+            if (!servidorSeleccionado) {
+                mostrarMensaje(t('msg-error-nodo'), true);
+                return;
+            }
+
+            aplicarGuardado(false);
+
+            estaConectando = true;
+            toggleKillswitch.disabled = true;
+
+            btnConectar.className = 'btn-conectar conectando';
+            btnTexto.innerText = t('msg-conectando');
+            statusTextTop.innerText = obtenerTextoInicioConexion();
+
+            window.apiVPN.enviar('conectar-vpn', {
+                vlessKey: servidoresDisponibles[servidorSeleccionado].vless,
+                serverId: servidorSeleccionado
+            });
+        } else {
+            estaDesconectando = true;
+
+            btnConectar.className = 'btn-conectar desconectando';
+            btnTexto.innerText = t('msg-apagando');
+            statusTextTop.innerText = t('status-deteniendo');
+
+            window.apiVPN.enviar('desconectar-vpn');
+
+            setTimeout(() => {
+                forzarDesconexionUI();
+            }, 1200);
+        }
+    });
+
+    function forzarDesconexionUI() {
+        estaConectado = false;
+        estaConectando = false;
+        estaDesconectando = false;
+
+        toggleKillswitch.disabled = false;
+
+        btnConectar.className = 'btn-conectar';
+
+        statusTextTop.classList.remove('protegido');
+
+        btnTexto.innerText = t('btn-conectar');
+        statusTextTop.innerText = t('status-inactivo');
+
+        mostrarMensaje(t('msg-desconectado'));
+    }
+
+    window.apiVPN.recibir('vpn-conectada-exito', () => {
+        timeoutConexionId = setTimeout(() => {
+            if (!estaConectando) return;
+
+            estaConectando = false;
+            estaConectado = true;
+
+            btnConectar.className = 'btn-conectar protegido';
+
+            statusTextTop.classList.add('protegido');
+
+            btnTexto.innerText = t('btn-desconectar');
+
+            statusTextTop.innerText = modoConexionActual === 'vpn'
+                ? t('msg-vpn-activa')
+                : t('msg-proxy-activo');
+
+            mostrarMensaje(t('msg-conexion-establecida'));
+        }, 4500);
+    });
+
+    window.apiVPN.recibir('error-suscripcion', (mensaje) => {
+        if (timeoutConexionId) {
+            clearTimeout(timeoutConexionId);
+        }
+
+        forzarDesconexionUI();
+
+        mostrarMensaje(`❌ ${mensaje}`, true);
+    });
+
+    const btnMin = document.getElementById('btn-minimizar');
+
+    btnMin.addEventListener('click', () => {
+        btnMin.classList.add('bloqueo-hover');
+        window.apiVPN.enviar('minimizar-ventana');
+    });
+
+    document.getElementById('btn-cerrar').addEventListener('click', () => {
+        window.apiVPN.enviar('cerrar-ventana');
+    });
+
+    window.addEventListener('mousemove', () => {
+        btnMin.classList.remove('bloqueo-hover');
+    });
+
+    function renderizarListaVless() {
+        const contenedor = document.getElementById('lista-vless-nodos');
+        contenedor.innerHTML = '';
+
+        const txtCopiar = t('copy-link');
+
+        for (const idPais in servidoresDisponibles) {
+            const data = servidoresDisponibles[idPais];
+            const isoCode = data.iso || "UN";
+            const nombreTraducido = obtenerNombrePaisTraducido(isoCode, data.nombre);
+
+            const div = document.createElement('div');
+            div.className = 'support-item';
+            div.style.cursor = 'pointer';
+
+            div.innerHTML = `
+                <span class="support-label">
+                    ${htmlBandera(isoCode, nombreTraducido)}
+                    ${nombreTraducido}
+                </span>
+                <span class="support-value vless-copy-text">${txtCopiar}</span>
+            `;
+
+            div.addEventListener('click', () => {
+                navigator.clipboard.writeText(data.vless).then(() => {
+                    mostrarMensaje(t('msg-vless-copied', { name: nombreTraducido }));
+                });
+            });
+
+            contenedor.appendChild(div);
+        }
+    }
+
+    const panelCredenciales = document.getElementById('panel-credenciales');
+    const btnAbrirCredenciales = document.getElementById('btn-abrir-credenciales');
+    const btnVolverAjustes = document.getElementById('btn-volver-ajustes');
+    const btnCopiarSub = document.getElementById('btn-copiar-sub');
+
+    btnAbrirCredenciales.addEventListener('click', () => {
+        panelCuenta.classList.remove('abierto');
+        panelCredenciales.classList.add('abierto');
+        renderizarListaVless();
+    });
+
+    btnVolverAjustes.addEventListener('click', () => {
+        panelCredenciales.classList.remove('abierto');
+        panelCuenta.classList.add('abierto');
+    });
+
+    btnCopiarSub.addEventListener('click', () => {
+        window.apiVPN.enviar('copiar-suscripcion');
+    });
+
+    window.apiVPN.recibir('suscripcion-copiada', (res) => {
+        if (res && res.ok) {
+            mostrarMensaje(t('msg-copiado'));
+        } else {
+            mostrarMensaje(t('sub-none'), true);
+        }
+    });
+
+    // ============================================================
+    // OTA v3 — controlador del modal in-app
+    // ============================================================
+    document.addEventListener("DOMContentLoaded", function otaModalInit() {
+        const overlay = document.getElementById('overlay-ota');
+        const modal = document.getElementById('ota-modal');
+
+        // FIX: Reubicar overlay + modal como hijos directos del .app-wrapper
+        // (asi respetan el border-radius: 20px y overflow: hidden del wrapper,
+        // y no cubren la title-bar).
+        const appWrapper = document.querySelector('.app-wrapper');
+        if (appWrapper && overlay && modal) {
+            appWrapper.appendChild(overlay);
+            appWrapper.appendChild(modal);
+        }
+        const elTitle = document.getElementById('ota-title');
+        const elMessage = document.getElementById('ota-message');
+        const elCurrentVer = document.getElementById('ota-current-version');
+        const elNewVer = document.getElementById('ota-new-version');
+        const elError = document.getElementById('ota-error');
+        const elProgressWrap = document.getElementById('ota-progress-wrap');
+        const elProgressText = document.getElementById('ota-progress-text');
+        const elProgressPercent = document.getElementById('ota-progress-percent');
+        const elProgressFill = document.getElementById('ota-progress-fill');
+        const btnLater = document.getElementById('ota-btn-later');
+        const btnAction = document.getElementById('ota-btn-action');
+        const elVersionLine = document.getElementById('ota-version-line');
+
+        if (!modal || !overlay || !btnAction || !btnLater) {
+            console.log('[OTA-UI] elementos del modal no encontrados, abort');
+            return;
+        }
+
+        // Estados: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'
+        let otaState = 'idle';
+
+        const otaLabels = {
+            es: {
+                'title-available': 'Nueva versión disponible',
+                'title-downloading': 'Descargando actualización',
+                'title-downloaded': 'Actualización lista',
+                'title-error': 'Error de actualización',
+                'msg-available': '¿Deseas descargarla ahora? El proceso puede tomar un momento.',
+                'msg-downloading': 'Espera mientras se descarga la nueva versión.',
+                'msg-downloaded': 'La actualización está lista para instalarse. Se reiniciará la app.',
+                'progress-text': 'Descargando…',
+                'btn-download': 'Descargar',
+                'btn-later': 'Más tarde',
+                'btn-restart': 'Reiniciar e instalar',
+                'label-current': 'Actual:',
+            },
+            en: {
+                'title-available': 'New version available',
+                'title-downloading': 'Downloading update',
+                'title-downloaded': 'Update ready',
+                'title-error': 'Update error',
+                'msg-available': 'Do you want to download it now? It may take a moment.',
+                'msg-downloading': 'Please wait while the new version is downloaded.',
+                'msg-downloaded': 'The update is ready to install. The app will restart.',
+                'progress-text': 'Downloading…',
+                'btn-download': 'Download',
+                'btn-later': 'Later',
+                'btn-restart': 'Restart & install',
+                'label-current': 'Current:',
+            },
+            ru: {
+                'title-available': 'Доступна новая версия',
+                'title-downloading': 'Загрузка обновления',
+                'title-downloaded': 'Обновление готово',
+                'title-error': 'Ошибка обновления',
+                'msg-available': 'Хочешь скачать её сейчас? Процесс может занять некоторое время.',
+                'msg-downloading': 'Пожалуйста, подожди, пока загружается новая версия.',
+                'msg-downloaded': 'Обновление готово к установке. Приложение будет перезапущено.',
+                'progress-text': 'Загрузка…',
+                'btn-download': 'Скачать',
+                'btn-later': 'Позже',
+                'btn-restart': 'Перезапустить и установить',
+                'label-current': 'Текущая:',
+            }
+        };
+
+        function otaT(key) {
+            const lang = (typeof currentLangValue !== 'undefined' && otaLabels[currentLangValue])
+                ? currentLangValue : 'es';
+            return (otaLabels[lang] && otaLabels[lang][key]) || otaLabels['es'][key] || key;
+        }
+
+        function otaShowModal() {
+            overlay.classList.add('activo');
+            modal.classList.add('visible');
+        }
+
+        function otaHideModal() {
+            overlay.classList.remove('activo');
+            modal.classList.remove('visible');
+        }
+
+        function otaRenderState() {
+            elError.classList.remove('visible');
+
+            if (otaState === 'available') {
+                elTitle.textContent = otaT('title-available');
+                elMessage.textContent = otaT('msg-available');
+                elMessage.style.display = 'block';
+                elVersionLine.style.display = 'block';
+                elProgressWrap.classList.remove('visible');
+                btnAction.textContent = otaT('btn-download');
+                btnAction.disabled = false;
+                btnLater.textContent = otaT('btn-later');
+                btnLater.style.display = 'block';
+            } else if (otaState === 'downloading') {
+                elTitle.textContent = otaT('title-downloading');
+                elMessage.textContent = otaT('msg-downloading');
+                elMessage.style.display = 'block';
+                elProgressText.textContent = otaT('progress-text');
+                elProgressWrap.classList.add('visible');
+                btnAction.style.display = 'none';
+                btnLater.textContent = otaT('btn-later');
+                btnLater.style.display = 'block';
+            } else if (otaState === 'downloaded') {
+                elTitle.textContent = otaT('title-downloaded');
+                elMessage.textContent = otaT('msg-downloaded');
+                elMessage.style.display = 'block';
+                elProgressWrap.classList.remove('visible');
+                btnAction.textContent = otaT('btn-restart');
+                btnAction.disabled = false;
+                btnAction.style.display = 'block';
+                btnLater.textContent = otaT('btn-later');
+                btnLater.style.display = 'block';
+            } else if (otaState === 'error') {
+                elTitle.textContent = otaT('title-error');
+                elMessage.style.display = 'none';
+                elProgressWrap.classList.remove('visible');
+                btnAction.style.display = 'none';
+                btnLater.textContent = otaT('btn-later');
+                btnLater.style.display = 'block';
+                elError.classList.add('visible');
+            }
+        }
+
+        // ---- eventos IPC ----
+        window.apiVPN.recibir('ota:available', (info) => {
+            otaState = 'available';
+            elCurrentVer.textContent = 'v' + (info.currentVersion || '?');
+            elNewVer.textContent = 'v' + (info.version || '?');
+            otaRenderState();
+            otaShowModal();
+        });
+
+        window.apiVPN.recibir('ota:progress', (progress) => {
+            const p = Math.max(0, Math.min(100, progress.percent || 0));
+            elProgressFill.style.width = p + '%';
+            elProgressPercent.textContent = p + '%';
+        });
+
+        window.apiVPN.recibir('ota:downloaded', (info) => {
+            otaState = 'downloaded';
+            if (info && info.version) {
+                elNewVer.textContent = 'v' + info.version;
+            }
+            otaRenderState();
+            otaShowModal();
+        });
+
+        window.apiVPN.recibir('ota:error', (err) => {
+            // Solo mostrar el error si el modal ya estaba visible (para no molestar
+            // al user en errores silenciosos del chequeo periódico)
+            if (!modal.classList.contains('visible')) return;
+            otaState = 'error';
+            elError.textContent = (err && err.message) || 'Unknown error';
+            otaRenderState();
+        });
+
+        window.apiVPN.recibir('ota:not-available', () => {
+            // Silencioso: no molestamos al user si no hay update
+        });
+
+        // ---- eventos del user ----
+        btnAction.addEventListener('click', () => {
+            if (otaState === 'available') {
+                otaState = 'downloading';
+                otaRenderState();
+                elProgressFill.style.width = '0%';
+                elProgressPercent.textContent = '0%';
+                window.apiVPN.enviar('ota-download');
+            } else if (otaState === 'downloaded') {
+                btnAction.disabled = true;
+                btnLater.disabled = true;
+                window.apiVPN.enviar('ota-install-restart');
+            }
+        });
+
+        btnLater.addEventListener('click', () => {
+            otaHideModal();
+            // Nota: si estaba downloading, la descarga sigue en background.
+            // El siguiente chequeo (o el evento update-downloaded) volverá a mostrar
+            // el modal cuando corresponda.
+        });
+    });
+
+</script>
+
+<!-- ============================================================ -->
+<!-- MODAL OTA v3 (in-app, bloqueante, cierra overlay-menus)      -->
+<!-- ============================================================ -->
+<div class="overlay" id="overlay-ota"></div>
+<div class="ota-modal" id="ota-modal">
+    <div class="ota-modal-icon">✨</div>
+    <h3 class="ota-modal-title" id="ota-title">Nueva versión disponible</h3>
+    <p class="ota-modal-version" id="ota-version-line">
+        Actual: <span id="ota-current-version">-</span>
+        <span class="ota-version-badge" id="ota-new-version">-</span>
+    </p>
+    <p class="ota-modal-message" id="ota-message">
+        ¿Deseas descargarla ahora?
+    </p>
+    <div class="ota-modal-error" id="ota-error"></div>
+    <div class="ota-progress-wrap" id="ota-progress-wrap">
+        <div class="ota-progress-label">
+            <span id="ota-progress-text">Descargando…</span>
+            <span class="ota-percent" id="ota-progress-percent">0%</span>
+        </div>
+        <div class="ota-progress-track">
+            <div class="ota-progress-fill" id="ota-progress-fill"></div>
+        </div>
+    </div>
+    <div class="ota-modal-buttons">
+        <button class="ota-btn ota-btn-secondary" id="ota-btn-later">Más tarde</button>
+        <button class="ota-btn ota-btn-primary" id="ota-btn-action">Descargar</button>
+    </div>
+</div>
+</div><!-- .app-wrapper -->
+</body>
+</html>
