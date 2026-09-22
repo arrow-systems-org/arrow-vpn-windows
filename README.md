@@ -1,157 +1,100 @@
 # Arrow VPN (Windows)
 
-[![Version](https://img.shields.io/github/v/release/arrow-systems/arrow-vpn-windows?label=version&color=blue)](https://github.com/arrow-systems/arrow-vpn-windows/releases/latest)
+[![Version](https://img.shields.io/github/v/release/arrow-systems-org/arrow-vpn-windows?label=version&color=blue)](https://github.com/arrow-systems-org/arrow-vpn-windows/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 ![Status](https://img.shields.io/badge/status-stable-success)
-[![Engine](https://img.shields.io/badge/engine-sing--box-purple)](https://github.com/SagerNet/sing-box)
-
----
+[![Engine](https://img.shields.io/badge/engine-sing--box--lx-purple)](https://github.com/Leadaxe/sing-box-lx)
 
 ## Arrow VPN
 
-Privacy-focused VPN client for Windows built by Arrow Systems.
+Arrow VPN is a privacy-focused Windows VPN client. Arrow VPN subscriptions are first-class, but the client is intentionally **not locked to Arrow as a provider**: compatible third-party subscriptions and individual share links can be imported without an Arrow account or a central Arrow authentication service.
 
-Arrow VPN is designed to provide strong privacy, censorship resistance, and stable connectivity using modern networking technologies powered by **sing-box**.
+The app parses subscription data locally, keeps node credentials in the Electron main process, and stores subscription/node secrets encrypted at rest with Windows DPAPI through Electron `safeStorage`.
 
----
+## Features
 
-## ✨ Features
+- **Provider-agnostic subscriptions**: Arrow VPN or compatible external providers.
+- **Single-node import** for supported share links.
+- Supported node schemes: **VLESS, Trojan, VMess, Shadowsocks, Hysteria2/Hy2 and TUIC**.
+- **VLESS + REALITY + XHTTP** support through sing-box-lx.
+- VLESS `encryption` passthrough and sing-box-lx REALITY `key_share`, `fragment` and `record_fragment` support.
+- System-wide **TUN** mode and local **Proxy** mode.
+- **Kill Switch** with restoration of the user's previous Windows firewall policy.
+- IPv4 + IPv6 TUN support.
+- `strict_route` enabled in TUN mode to reduce DNS/routing leaks on Windows.
+- Real connection health check before the UI reports a successful connection.
+- Automatic recovery when the core exits unexpectedly.
+- Local server reachability radar without exposing node credentials to the renderer.
+- English, Spanish and Russian UI.
+- Subscription URL and node credentials encrypted at rest.
+- HTTPS-only remote subscriptions; HTTPS redirects are not allowed to downgrade to HTTP.
+- Subscription response size cap to protect the Electron main process.
 
-- 🔗 **Subscription-link based activation** — paste a single URL to activate, no UUID or password
-- 🔒 No-logs philosophy
-- 🌍 Multi-server global routing
-- ⚡ Real-time latency radar
-- 🧠 Smart connection handling
-- 🛡️ Kill Switch support
-- 🔀 Dual mode:
-    - TUN (full system VPN)
-    - Proxy mode (local)
-- 🧬 IPv4 + IPv6 support (dual stack)
-- 🕵️‍♂️ Advanced censorship evasion (VLESS + Reality / TLS)
-- 🌐 Multilingual UI — English, Spanish, Russian
-- 🏳️ Local flag cache with offline fallback bundled in the installer
-- 🔄 Silent subscription refresh on launch
-- 🔐 Subscription link stored encrypted on disk via Windows DPAPI (`safeStorage`)
-- 🧩 Modern architecture powered by **sing-box**
+### Subscription compatibility
 
----
+Arrow currently accepts:
 
-## 🚀 Getting Started
+- HTTPS subscription URLs whose response is a plaintext list of supported share links.
+- Base64-encoded lists of supported share links.
+- A single supported share link pasted directly into the activation field.
 
-After installing the app:
+Arrow does **not** currently parse arbitrary Clash YAML or arbitrary sing-box JSON subscription documents. Providers that offer a URI/base64 subscription format should work without Arrow-specific authentication.
 
-1. Open Arrow VPN.
-2. Paste your **subscription link** (provided when you sign up) in the activation field.
-3. The app fetches the link, loads your available servers, and shows your plan status.
-4. Pick a server and connect.
+## Engine requirement
 
-The subscription link is encrypted locally with Windows DPAPI and bound to your Windows user account — you only need to paste it once per machine.
+Arrow 3.1.x requires **sing-box-lx 1.14.1-lx.4 or newer**. The app checks the core version and runs `sing-box check` on every generated configuration before starting it.
 
----
+This source package intentionally does not need to bundle a core. Put the Windows build in `bin/` as described in [`bin/README-SING-BOX-LX.txt`](./bin/README-SING-BOX-LX.txt).
 
-## 🧱 Architecture
+The lx.4 release is particularly relevant to REALITY compatibility with Xray 26.9.8/26.9.9 because it supports the hybrid `X25519MLKEM768` key share and applies `fragment` / `record_fragment` to REALITY.
 
-Arrow VPN uses:
+## Privacy model
 
-- **Electron** — UI and application layer
-- **sing-box** — networking engine
-- **VLESS + Reality** — secure transport protocol with strong DPI evasion
-- **TUN interface** — for system-wide routing
-- **Subscription-based account model** — server list and expiration metadata fetched from a single subscription URL
-- **Windows DPAPI** (`safeStorage`) — for at-rest encryption of the subscription link
+Arrow Client does not require a central Arrow login. A subscription is treated as a local source of node definitions. External subscription URLs are requested directly by the client; they are not sent to an Arrow conversion/authentication endpoint.
 
----
+Secrets are kept out of the renderer process. The renderer receives sanitized server metadata only. The encrypted subscription URL and encrypted node map are stored through Windows DPAPI. Runtime sing-box logging defaults to `warn` to avoid creating a local per-connection browsing-style log.
 
-## ⚙️ Requirements
+## Development
 
-- Windows 10 / 11
-- Administrator privileges (required for TUN mode)
-- Internet access
+Requirements:
 
----
+- Windows 10 / 11 for runtime testing.
+- Node.js 24+ for development/builds.
+- Administrator privileges for the current TUN/network-management architecture.
 
-## 🚀 Development
+Install dependencies and run checks:
 
-Clone the repository:
-
-```
-git clone https://github.com/arrow-systems/arrow-vpn-windows.git
-cd arrow-vpn-windows
-```
-
-Install dependencies:
-
-```
+```bash
 npm install
+npm run check
+npm test
 ```
 
 Run the app:
 
+```bash
+npm start
 ```
-npx electron .
-```
 
----
+Build the Windows installer after placing the required sing-box-lx files in `bin/`:
 
-## 🏗️ Build
-
-To build the Windows installer:
-
-```
+```bash
 npm run build
 ```
 
-Output directory:
+Output is written to `dist/`.
 
-```
-/dist
-```
+## Important implementation notes
 
----
+- The application still runs elevated because TUN, routes, NRPT and firewall management require administrative access in the current architecture. Moving those operations into a small privileged helper/service remains a future hardening task and should be tested on real Windows systems before deployment.
+- The server radar reports reachability, not a full protocol handshake. A full end-to-end HTTP health check is performed during an actual connection before the UI reports success.
+- `geoip.dat` / `geosite.dat` are not required by the current generated configuration and are intentionally not part of the lx-ready source package.
 
-## 📦 Releases
+## License
 
-Pre-built binaries are available here:
+MIT License. The Arrow VPN / Arrow Systems names and branding are separate trademarks.
 
-https://github.com/arrow-systems/arrow-vpn-windows/releases
+## Security
 
----
-
-## 🧠 Notes
-
-- After major networking changes, browsers (especially Firefox) may require:
-    - DNS cache clearing
-    - HTTP connection reset
-- IPv6 support depends on network environment
-- TUN mode requires administrator privileges
-- The encrypted subscription link is tied to the current Windows user and machine. Moving the user profile to a different machine requires re-pasting the subscription link.
-
----
-
-## ⚖️ License
-
-MIT License
-
----
-
-## ™ Trademark Notice
-
-The name **Arrow VPN** and **Arrow Systems** are trademarks.
-
-You may use, modify, and distribute the code under MIT License terms,
-but you may not use the name or branding without permission.
-
----
-
-## 🌐 About
-
-Arrow Systems focuses on privacy tools designed for real-world conditions, including restricted networks and censorship-heavy environments.
-
----
-
-## ⚠️ Disclaimer
-
-This software is provided "as is", without warranty of any kind.
-
-Use responsibly and in accordance with your local laws.
+Please see [`SECURITY.md`](./SECURITY.md) for vulnerability reporting and local-secret handling notes.

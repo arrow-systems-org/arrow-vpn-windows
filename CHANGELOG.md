@@ -1,8 +1,165 @@
+# 3.1.3 — Update infrastructure failover
+
+- Replaced the hardcoded `https://de.arrow-x.org:7777/descargas` updater endpoint.
+- Added HTTPS/443 update sources with automatic failover: primary Arrow mirror, Russian mirror, GitHub Releases, and the independent `arrow-updates.xyz` emergency domain.
+- Added mirror failover for both update checks and installer downloads.
+- Suppressed transient mirror errors while failover is in progress; users only see an OTA error when every source fails.
+- Added tests preventing regressions back to the legacy `:7777` endpoint.
+
 # Changelog
+
+
+## 3.1.2 — Fast lifecycle / responsiveness pass
+
+* Removed the renderer's artificial 4.5-second post-connect delay; connected state is now shown immediately after the main-process readiness and end-to-end health checks pass.
+* Replaced the fixed 1.2-second disconnect UI reset with an explicit `vpn-desconectada-exito` acknowledgement from the main process.
+* Added an immediate clean-quit path: exiting from the tray while already disconnected no longer launches redundant PowerShell, task-list or network-restoration work.
+* When quitting from an active connection, the window and tray disappear immediately while safe network cleanup continues before process termination.
+* Reworked sing-box shutdown around child-process exit events, with a short targeted force-kill fallback instead of multi-second polling loops.
+* Reworked sing-box startup around the process `spawn` event; readiness is determined by the real local proxy/TUN state and the existing end-to-end health check instead of a fixed startup sleep.
+* TUN discovery now polls `os.networkInterfaces()` first and only falls back to `netsh` periodically, reducing process-spawn overhead.
+* Added a persistent `network_dirty.flag`: clean launches skip recovery entirely, while crashes/interrupted sessions still trigger full startup recovery.
+* Added cached sing-box-lx version validation keyed by the executable signature, plus a post-UI warm-up so the first connection normally avoids an extra `sing-box version` launch.
+* Added a short-lived reachability cache so Connect can reuse a freshly resolved endpoint from the server radar.
+* Reduced redundant Windows proxy/firewall/DNS work and made cleanup success/failure reporting stricter.
+* Temporary sing-box config is now deleted after actual proxy/TUN readiness instead of after an arbitrary timer.
+* Added internal privacy-safe `[perf]` timing markers for connect, disconnect, cleanup and quit paths.
+* Added lifecycle/performance regression tests. Test suite now contains 31 tests.
+
+
+## 3.1.1
+
+* Server selector now has an explicit pending reachability state instead of visually implying that unchecked nodes are online.
+* Nodes show a blue pulsing indicator and localized `Checking...` text during the initial/manual availability scan.
+* Pending nodes cannot be selected until their reachability result is known, while remaining visually distinct from offline nodes.
+* Automatic background refreshes preserve the last known reachability result so the server selector does not lock every 10 seconds.
 
 All notable changes to this project will be documented in this file.
 
 This project follows a structured release format to track improvements, fixes, and architectural changes over time.
+
+---
+
+## Arrow VPN v3.1.0 — sing-box-lx, multi-provider parsing and privacy hardening
+
+### Engine and protocol compatibility
+
+* Switched the expected runtime from upstream sing-box to **sing-box-lx 1.14.1-lx.4+**.
+* Added runtime core-version validation and `sing-box check` before every start.
+* Added VLESS XHTTP rendering for sing-box-lx, including `extra`/XMUX option mapping.
+* Added REALITY `key_share`, `fragment` and `record_fragment` passthrough for lx.4.
+* Added VLESS `encryption` passthrough.
+* Added Trojan, VMess, Shadowsocks, Hysteria2/Hy2 and TUIC share-link parsing/rendering.
+* Replaced hostname-derived server IDs with stable hashes of the node definition to avoid collisions.
+
+### Provider independence
+
+* Arrow subscriptions remain first-class, but compatible third-party HTTPS subscriptions are accepted.
+* Single supported share links can be imported directly without contacting an Arrow service.
+* Plaintext and base64 subscription bodies can contain mixed supported protocols.
+* Subscription parsing is local; external subscription URLs are requested directly by the client.
+
+### Security and privacy
+
+* Node credentials are encrypted at rest alongside the subscription URL using Electron `safeStorage` / Windows DPAPI.
+* Raw node URIs are no longer returned to the renderer; copy-node operations are performed in the main process.
+* Removed plaintext-write fallback when secure storage is unavailable.
+* Remote subscriptions require HTTPS, including the final URL after redirects.
+* Added a 5 MiB subscription-response cap.
+* Enabled TUN `strict_route`.
+* Reduced sing-box runtime logging from `info` to `warn`.
+* Removed legacy DNS compatibility environment flags.
+
+### Connection reliability
+
+* Added IPv4/IPv6 candidate probing instead of blindly preferring IPv6.
+* Added an end-to-end HTTP health check before reporting a connection as successful.
+* Added clearer REALITY/core/config/health error summaries.
+* UDP-native protocols use DNS reachability in the server radar instead of a meaningless TCP probe.
+
+### Kill Switch and Windows recovery
+
+* Implemented an actual Windows Firewall kill switch instead of only deleting a historical rule name.
+* The original per-profile outbound firewall policy is snapshotted and restored on normal disconnect.
+* sing-box itself, loopback traffic and ArrowTUN are allowed while the kill switch is active.
+* Unexpected core termination can preserve the blocking state until the user reconnects or disables the kill switch.
+
+### Testing
+
+* Added protocol tests for XHTTP/REALITY, REALITY lx.4 fields, VLESS encryption, Trojan, Hysteria2, TUIC, VMess and Shadowsocks.
+* Added architecture/security tests for lx version checks, strict routing, secret handling, kill switch behaviour, end-to-end health checks, HTTPS downgrade prevention and privacy-focused logging.
+
+### Packaging
+
+* The lx-ready source package leaves `sing-box.exe` / `libcronet.dll` for the maintainer to add from the desired sing-box-lx Windows release.
+* Removed unused `geoip.dat` and `geosite.dat` from the lx-ready package.
+
+---
+## Arrow VPN v3.0.2 — Modernized Electron stack
+
+This beta branch upgrades the desktop application architecture for the current Electron toolchain while retaining the v3.0.2 Windows network-recovery fixes.
+
+### Platform modernization
+
+* Electron 44.4.0, electron-builder 26.15.3, electron-updater 6.8.9 and electron-store 11.0.2.
+* Main process migrated from CommonJS to native ESM.
+* Node.js 24+ is the supported development/runtime tooling baseline.
+* Sandboxed, context-isolated preload bridge with explicit IPC channel allowlists.
+* IPC requests from the renderer are validated against the primary BrowserWindow sender.
+* Renderer JavaScript moved out of inline HTML into `renderer.js` and protected by a Content Security Policy.
+* Clipboard writes are routed through the isolated preload bridge instead of direct renderer clipboard access.
+* Global TLS certificate verification bypass removed.
+* Electron logging now uses the dedicated `electron-log/main` entrypoint.
+
+---
+
+## Arrow VPN v3.0.2
+
+This release hardens the Windows network lifecycle to prevent DNS, proxy, TUN, or routing state from being left behind after disconnects, crashes, slow system operations, or application shutdown. The bundled sing-box core was also updated.
+
+### ✨ Highlights
+
+* Deterministic connect/disconnect state machine
+* Synchronous TUN/DNS setup with no orphaned PowerShell race
+* Automatic network recovery if sing-box exits unexpectedly
+* Persistent snapshot and exact restoration of the user's original Windows proxy settings
+* Verified cleanup of Arrow NRPT rules, TUN default routes, proxy state, and sing-box processes
+* Safe application and OTA shutdown after network restoration
+* Updated bundled sing-box core
+
+### Fixes
+
+* Fixed a race where `network_setup.ps1` could finish after the VPN was disconnected and recreate the global ArrowVPN NRPT DNS rule.
+* Fixed disconnect returning before DNS/firewall cleanup had actually completed.
+* Fixed sing-box crashes leaving Windows networking configured for a tunnel that no longer existed.
+* Fixed application shutdown potentially terminating before asynchronous network cleanup completed.
+* Replaced destructive proxy cleanup with a persistent pre-connection snapshot and exact restoration of `ProxyEnable`, `ProxyServer`, `ProxyOverride`, and `AutoConfigURL`.
+* Added startup recovery for interrupted sessions and an emergency synchronous cleanup fallback.
+* Added post-disconnect verification and one automatic cleanup retry when Arrow-specific network state remains.
+
+## Русская версия
+## Arrow VPN v3.0.2
+
+В этой версии усилен жизненный цикл сети Windows, чтобы после отключения VPN, сбоя sing-box, медленной работы системы или закрытия приложения не оставались DNS-правила, прокси, маршруты или состояние TUN. Также обновлено встроенное ядро sing-box.
+
+### ✨ Основные особенности
+
+* Детерминированная машина состояний подключения и отключения
+* Ожидание завершения настройки TUN/DNS без фоновых гонок PowerShell
+* Автоматическое восстановление сети при неожиданном завершении sing-box
+* Сохранение и точное восстановление исходных настроек прокси Windows
+* Проверка удаления NRPT ArrowVPN, маршрутов ArrowTUN, локального прокси и процесса sing-box
+* Безопасное закрытие приложения и установка OTA только после восстановления сети
+* Обновлено встроенное ядро sing-box
+
+### Исправления
+
+* Устранена гонка, при которой настройка сети могла завершиться уже после отключения VPN и повторно создать глобальное DNS-правило ArrowVPN.
+* Отключение VPN теперь ждёт фактического завершения очистки сети.
+* При аварийной остановке sing-box Windows автоматически возвращается в рабочее сетевое состояние.
+* Исправлено закрытие приложения до завершения асинхронной очистки сети.
+* Вместо удаления пользовательских настроек прокси теперь сохраняется снимок и восстанавливаются исходные значения Windows.
+* Добавлено восстановление после аварийного завершения предыдущей сессии и резервная синхронная очистка.
 
 ---
 

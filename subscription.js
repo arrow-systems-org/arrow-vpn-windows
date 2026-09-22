@@ -1,374 +1,188 @@
-// ==========================================
-// subscription.js
-// Módulo de gestión de suscripción para Arrow VPN.
-//
-// Responsabilidades:
-//   - Descargar el contenido de una URL de suscripción
-//   - Decodificar el base64
-//   - Parsear cada línea vless:// a un objeto servidor estructurado
-//   - Extraer metadatos de la suscripción (expiración, tráfico, título)
-//   - Cifrar/descifrar la URL de suscripción con safeStorage
-//
-// NO toca sing-box ni la red. Solo datos.
-// ==========================================
+// subscription.js — privacy-first subscription/source manager.
+// Parsing is provider-agnostic: Arrow VPN gets first-class metadata, but the
+// client can consume compatible third-party subscriptions or single share links.
 
-const { safeStorage } = require('electron');
+import { safeStorage } from 'electron';
+import {
+    parseNodeUri,
+    parseSubscriptionText,
+    parsearNombreServidor,
+    isoDesdeBandera,
+    extraerEmojiBandera,
+    canonicalSupportedSchemes
+} from './protocols.js';
 
-// --------------------------------------------------
-// Cifrado del link con safeStorage (clave del equipo)
-// --------------------------------------------------
-//
-// safeStorage usa DPAPI en Windows, ligado al usuario de Windows.
-// El link cifrado SOLO se puede descifrar en este equipo/usuario.
-// Devolvemos base64 para poder guardarlo como string en electron-store.
-
-function cifrarSubUrl(subUrl) {
+function cifrarSecreto(value) {
+    const text = String(value ?? '');
+    if (!text) return '';
     if (!safeStorage.isEncryptionAvailable()) {
-        // Fallback: si por alguna razón no hay cifrado disponible
-        // (raro en Windows), marcamos con prefijo plano para no romper.
-        return 'plain:' + subUrl;
+        throw new Error('secure_storage_unavailable');
     }
-    const buffer = safeStorage.encryptString(subUrl);
-    return 'enc:' + buffer.toString('base64');
+    return 'enc:' + safeStorage.encryptString(text).toString('base64');
 }
 
-function descifrarSubUrl(almacenado) {
-    if (!almacenado) return '';
-
-    if (almacenado.startsWith('plain:')) {
-        return almacenado.slice('plain:'.length);
-    }
-
-    if (almacenado.startsWith('enc:')) {
-        if (!safeStorage.isEncryptionAvailable()) {
-            return '';
-        }
+function descifrarSecreto(stored) {
+    if (!stored) return '';
+    const value = String(stored);
+    if (value.startsWith('enc:')) {
+        if (!safeStorage.isEncryptionAvailable()) return '';
         try {
-            const b64 = almacenado.slice('enc:'.length);
-            const buffer = Buffer.from(b64, 'base64');
-            return safeStorage.decryptString(buffer);
-        } catch (e) {
+            return safeStorage.decryptString(Buffer.from(value.slice(4), 'base64'));
+        } catch {
             return '';
         }
     }
-
-    // Compatibilidad: si viene sin prefijo, asumimos plano
-    return almacenado;
+    // Read-only migration path for <=3.0.2. New writes never use plaintext.
+    if (value.startsWith('plain:')) return value.slice(6);
+    return value;
 }
 
-// --------------------------------------------------
-// Extracción de ISO de país desde emoji de bandera
-// --------------------------------------------------
-//
-// Un emoji de bandera son 2 "Regional Indicator Symbols".
-// Cada símbolo está en el rango U+1F1E6 (A) .. U+1F1FF (Z).
-// Restando el offset obtenemos la letra. 🇳🇱 -> "NL".
+const cifrarSubUrl = cifrarSecreto;
+const descifrarSubUrl = descifrarSecreto;
 
-function isoDesdeBandera(texto) {
-    if (!texto) return null;
-
-    const codepoints = [...texto];
-    const letras = [];
-
-    for (const ch of codepoints) {
-        const cp = ch.codePointAt(0);
-        if (cp >= 0x1F1E6 && cp <= 0x1F1FF) {
-            letras.push(String.fromCharCode(65 + (cp - 0x1F1E6)));
-            if (letras.length === 2) break;
-        }
-    }
-
-    if (letras.length === 2) {
-        return letras.join('');
-    }
-    return null;
+function cifrarServidores(servidores) {
+    return cifrarSecreto(JSON.stringify(servidores || {}));
 }
 
-// Extrae solo el emoji de bandera (los primeros 2 regional indicators)
-function extraerEmojiBandera(texto) {
-    if (!texto) return '';
-
-    const codepoints = [...texto];
-    const emoji = [];
-
-    for (const ch of codepoints) {
-        const cp = ch.codePointAt(0);
-        if (cp >= 0x1F1E6 && cp <= 0x1F1FF) {
-            emoji.push(ch);
-            if (emoji.length === 2) break;
-        }
+function descifrarServidores(stored) {
+    const json = descifrarSecreto(stored);
+    if (!json) return {};
+    try {
+        const obj = JSON.parse(json);
+        return obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : {};
+    } catch {
+        return {};
     }
-
-    return emoji.join('');
 }
-
-// --------------------------------------------------
-// Parseo del nombre del servidor
-// --------------------------------------------------
-//
-// Formato observado: "🇳🇱 Netherlands | Нидерланды"
-// Devolvemos: { emoji, iso, nombreEN, nombreRU, nombreLimpio }
-
-function parsearNombreServidor(fragment) {
-    const texto = (fragment || '').trim();
-
-    const emoji = extraerEmojiBandera(texto);
-    const iso = isoDesdeBandera(texto) || 'UN';
-
-    // Quitar el emoji del texto para quedarnos con los nombres
-    let sinEmoji = texto;
-    if (emoji) {
-        sinEmoji = texto.replace(emoji, '').trim();
-    } else {
-        // Quitar cualquier regional indicator suelto
-        sinEmoji = [...texto]
-            .filter(ch => {
-                const cp = ch.codePointAt(0);
-                return !(cp >= 0x1F1E6 && cp <= 0x1F1FF);
-            })
-            .join('')
-            .trim();
-    }
-
-    // Separar por "|" si existe (EN | RU)
-    let nombreEN = sinEmoji;
-    let nombreRU = sinEmoji;
-
-    if (sinEmoji.includes('|')) {
-        const partes = sinEmoji.split('|').map(s => s.trim());
-        nombreEN = partes[0] || sinEmoji;
-        nombreRU = partes[1] || partes[0] || sinEmoji;
-    }
-
-    return {
-        emoji,
-        iso,
-        nombreEN,
-        nombreRU,
-        nombreLimpio: nombreEN,
-    };
-}
-
-// --------------------------------------------------
-// Parseo de una línea vless:// a objeto servidor
-// --------------------------------------------------
 
 function parsearLineaVless(linea) {
-    const url = linea.trim();
-    if (!url.startsWith('vless://')) return null;
-
-    let parsed;
-    try {
-        parsed = new URL(url);
-    } catch (e) {
-        return null;
-    }
-
-    // El fragment (#...) es el nombre, viene URL-encoded
-    let fragment = '';
-    try {
-        fragment = decodeURIComponent(parsed.hash.replace(/^#/, ''));
-    } catch (e) {
-        fragment = parsed.hash.replace(/^#/, '');
-    }
-
-    const meta = parsearNombreServidor(fragment);
-
-    // ID estable del servidor: usamos el host (nl.arrow-x.org -> "nl")
-    // Si el host no tiene subdominio reconocible, usamos el host completo.
-    const host = parsed.hostname;
-    let id = host;
-    const primerLabel = host.split('.')[0];
-    if (primerLabel && primerLabel.length <= 5) {
-        id = primerLabel; // "nl", "at", "us", etc.
-    }
-
-    return {
-        id,
-        vless: url,
-        host,
-        port: parseInt(parsed.port || '443', 10),
-        emoji: meta.emoji,
-        iso: meta.iso,
-        nombre: meta.nombreLimpio,
-        nombreEN: meta.nombreEN,
-        nombreRU: meta.nombreRU,
-    };
+    const node = parseNodeUri(linea);
+    return node?.protocol === 'vless' ? node : null;
 }
-
-// --------------------------------------------------
-// Parseo del cuerpo completo de la suscripción
-// --------------------------------------------------
-//
-// El cuerpo viene en base64. Al decodificar son N líneas vless://.
-// Algunos paneles devuelven el cuerpo SIN base64 (texto plano con
-// las líneas directas). Detectamos ambos casos.
 
 function parsearCuerpoSuscripcion(cuerpoRaw) {
-    let texto = (cuerpoRaw || '').trim();
-
-    // ¿Es base64? Heurística: si NO contiene "vless://" pero al
-    // decodificar como base64 sí aparece, entonces estaba en base64.
-    if (!texto.includes('vless://')) {
-        try {
-            const decodificado = Buffer.from(texto, 'base64').toString('utf8');
-            if (decodificado.includes('vless://')) {
-                texto = decodificado;
-            }
-        } catch (e) {
-            // no era base64, seguimos con el texto original
-        }
-    }
-
-    const lineas = texto
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(l => l.startsWith('vless://'));
-
-    const servidores = [];
-    for (const linea of lineas) {
-        const srv = parsearLineaVless(linea);
-        if (srv) servidores.push(srv);
-    }
-
-    return servidores;
+    return parseSubscriptionText(cuerpoRaw);
 }
 
-// --------------------------------------------------
-// Parseo del header subscription-userinfo
-// --------------------------------------------------
-//
-// Formato: "upload=0; download=227964165; total=0; expire=0"
-// expire es timestamp Unix en segundos (0 = sin expiración)
-
 function parsearUserinfo(headerValue) {
-    const info = {
-        upload: 0,
-        download: 0,
-        total: 0,
-        expire: 0,
-    };
-
+    const info = { upload: 0, download: 0, total: 0, expire: 0 };
     if (!headerValue) return info;
-
-    const partes = headerValue.split(';');
-    for (const parte of partes) {
-        const [k, v] = parte.split('=').map(s => (s || '').trim());
-        if (k && v !== undefined && k in info) {
-            const num = parseInt(v, 10);
-            if (!isNaN(num)) info[k] = num;
+    for (const part of String(headerValue).split(';')) {
+        const [k, v] = part.split('=').map(s => (s || '').trim());
+        if (k && v !== undefined && Object.hasOwn(info, k)) {
+            const n = Number.parseInt(v, 10);
+            if (Number.isFinite(n)) info[k] = n;
         }
     }
-
     return info;
 }
 
-// --------------------------------------------------
-// Decodificar profile-title (puede venir "base64:...")
-// --------------------------------------------------
-
 function decodificarTitulo(headerValue) {
-    if (!headerValue) return 'Arrow VPN';
-
-    if (headerValue.startsWith('base64:')) {
-        try {
-            const b64 = headerValue.slice('base64:'.length);
-            return Buffer.from(b64, 'base64').toString('utf8');
-        } catch (e) {
-            return 'Arrow VPN';
-        }
+    if (!headerValue) return 'VPN Subscription';
+    const value = String(headerValue);
+    if (value.startsWith('base64:')) {
+        try { return Buffer.from(value.slice(7), 'base64').toString('utf8'); }
+        catch { return 'VPN Subscription'; }
     }
-
-    return headerValue;
+    return value;
 }
 
-// --------------------------------------------------
-// Fetch + parse completo de una suscripción
-// --------------------------------------------------
-//
-// Devuelve:
-//   {
-//     ok: true/false,
-//     servidores: [...],
-//     expira: <timestamp Unix s o 0>,
-//     trafico: { upload, download, total },
-//     titulo: "Arrow VPN",
-//     updateInterval: <horas>,
-//     error: "..." (si ok=false)
-//   }
+function isShareLink(value) {
+    const scheme = String(value || '').trim().match(/^([a-zA-Z0-9+.-]+):\/\//)?.[1]?.toLowerCase();
+    return Boolean(scheme && canonicalSupportedSchemes().includes(scheme));
+}
 
-async function obtenerSuscripcion(subUrl, timeoutMs = 12000) {
-    if (!subUrl || !/^https?:\/\//i.test(subUrl)) {
-        return { ok: false, error: 'invalid_url', servidores: [] };
+async function obtenerSuscripcion(source, timeoutMs = 12000) {
+    const input = String(source || '').trim();
+    if (!input) return { ok: false, error: 'invalid_url', servidores: [] };
+
+    // A single imported node never leaves the device.
+    if (isShareLink(input)) {
+        const node = parseNodeUri(input);
+        if (!node) return { ok: false, error: 'no_servers', servidores: [] };
+        return {
+            ok: true,
+            servidores: [node],
+            expira: 0,
+            trafico: { upload: 0, download: 0, total: 0 },
+            titulo: 'Imported node',
+            updateInterval: 0,
+            sourceType: 'single-node'
+        };
+    }
+
+    let parsed;
+    try { parsed = new URL(input); } catch { return { ok: false, error: 'invalid_url', servidores: [] }; }
+    if (parsed.protocol !== 'https:') {
+        return { ok: false, error: 'insecure_url', servidores: [] };
     }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
     let resp;
     try {
-        resp = await fetch(subUrl, {
+        resp = await fetch(input, {
             signal: controller.signal,
+            redirect: 'follow',
             headers: {
-                // Algunos paneles devuelven distinto contenido según UA;
-                // nos identificamos como un cliente genérico compatible.
-                'User-Agent': 'ArrowVPN/2.1 (sing-box; compatible)',
-            },
+                'User-Agent': 'ArrowVPN/3.1 (sing-box-lx; subscription-compatible)',
+                'Accept': 'text/plain, application/octet-stream, */*'
+            }
         });
     } catch (e) {
         clearTimeout(timeoutId);
-        return {
-            ok: false,
-            error: e.name === 'AbortError' ? 'timeout' : 'network',
-            servidores: [],
-        };
+        return { ok: false, error: e.name === 'AbortError' ? 'timeout' : 'network', servidores: [] };
     }
-
     clearTimeout(timeoutId);
 
-    if (!resp.ok) {
-        return {
-            ok: false,
-            error: `http_${resp.status}`,
-            servidores: [],
-        };
+    // A redirect must not silently downgrade an HTTPS subscription to plaintext HTTP.
+    try {
+        if (new URL(resp.url).protocol !== 'https:') {
+            return { ok: false, error: 'insecure_url', servidores: [] };
+        }
+    } catch {
+        return { ok: false, error: 'invalid_url', servidores: [] };
     }
 
-    const cuerpo = await resp.text();
-    const servidores = parsearCuerpoSuscripcion(cuerpo);
+    if (!resp.ok) return { ok: false, error: `http_${resp.status}`, servidores: [] };
 
-    if (servidores.length === 0) {
-        return {
-            ok: false,
-            error: 'no_servers',
-            servidores: [],
-        };
+    // Subscriptions are line-oriented and normally tiny. Cap the response to avoid
+    // a malicious or broken provider making the Electron main process hold huge blobs.
+    const MAX_SUBSCRIPTION_BYTES = 5 * 1024 * 1024;
+    const contentLength = Number.parseInt(resp.headers.get('content-length') || '0', 10);
+    if (Number.isFinite(contentLength) && contentLength > MAX_SUBSCRIPTION_BYTES) {
+        return { ok: false, error: 'too_large', servidores: [] };
     }
+    const body = await resp.text();
+    if (Buffer.byteLength(body, 'utf8') > MAX_SUBSCRIPTION_BYTES) {
+        return { ok: false, error: 'too_large', servidores: [] };
+    }
+    const servidores = parseSubscriptionText(body);
+    if (!servidores.length) return { ok: false, error: 'no_servers', servidores: [] };
 
     const userinfo = parsearUserinfo(resp.headers.get('subscription-userinfo'));
-    const titulo = decodificarTitulo(resp.headers.get('profile-title'));
-    const updateInterval = parseInt(
-        resp.headers.get('profile-update-interval') || '12',
-        10
-    );
+    const titleHeader = resp.headers.get('profile-title');
+    const titulo = decodificarTitulo(titleHeader || parsed.hostname || 'VPN Subscription');
+    const updateIntervalRaw = Number.parseInt(resp.headers.get('profile-update-interval') || '12', 10);
 
     return {
         ok: true,
         servidores,
         expira: userinfo.expire,
-        trafico: {
-            upload: userinfo.upload,
-            download: userinfo.download,
-            total: userinfo.total,
-        },
+        trafico: { upload: userinfo.upload, download: userinfo.download, total: userinfo.total },
         titulo,
-        updateInterval: isNaN(updateInterval) ? 12 : updateInterval,
+        updateInterval: Number.isFinite(updateIntervalRaw) ? updateIntervalRaw : 12,
+        sourceType: /(^|\.)arrow-x\.(org|com|biz)$/i.test(parsed.hostname) ? 'arrow' : 'external'
     };
 }
 
-module.exports = {
+export {
+    cifrarSecreto,
+    descifrarSecreto,
     cifrarSubUrl,
     descifrarSubUrl,
+    cifrarServidores,
+    descifrarServidores,
     obtenerSuscripcion,
     parsearCuerpoSuscripcion,
     parsearLineaVless,
@@ -377,4 +191,5 @@ module.exports = {
     decodificarTitulo,
     isoDesdeBandera,
     extraerEmojiBandera,
+    isShareLink
 };

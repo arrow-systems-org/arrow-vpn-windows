@@ -331,8 +331,15 @@ body {
     -webkit-app-region: no-drag;
 }
 
-.server-option:hover:not(.disabled) { background: rgba(255, 255, 255, 0.1); }
+.server-option:hover:not(.disabled):not(.checking) { background: rgba(255, 255, 255, 0.1); }
 .server-option.disabled { color: #555555; cursor: not-allowed; }
+.server-option.checking {
+    color: white;
+    cursor: wait;
+    opacity: 1;
+    background: rgba(52, 152, 219, 0.06);
+}
+.server-option.checking:disabled { opacity: 1; }
 
 .server-info { display: flex; align-items: center; }
 
@@ -340,6 +347,16 @@ body {
 .dot-activo { background-color: #2ecc71; color: #2ecc71; }
 .dot-mantenimiento { background-color: #f39c12; color: #f39c12; }
 .dot-apagado { background-color: #e74c3c; color: #e74c3c; }
+.dot-comprobando {
+    background-color: #3498db;
+    color: #3498db;
+    animation: radar-pulse 1.15s ease-in-out infinite;
+}
+
+@keyframes radar-pulse {
+    0%, 100% { opacity: 0.45; transform: scale(0.88); box-shadow: 0 0 4px currentColor; }
+    50% { opacity: 1; transform: scale(1.18); box-shadow: 0 0 12px currentColor; }
+}
 
 /* .bandera y .vless-flag definidas juntas más abajo (sección BANDERAS) */
 

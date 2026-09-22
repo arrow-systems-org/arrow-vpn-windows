@@ -13,9 +13,13 @@
 // descargan la primera vez y quedan cacheados.
 // ==========================================
 
-const { app } = require('electron');
-const path = require('path');
-const fs = require('fs');
+import { app } from 'electron';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const BASE_URL_BANDERAS = 'https://arrow-x.org/banderas';
 
@@ -156,7 +160,7 @@ async function sincronizarBanderas(listaIso) {
     return resultado;
 }
 
-module.exports = {
+export {
     resolverBandera,
     sincronizarBanderas,
     dirCache,
