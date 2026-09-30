@@ -42,6 +42,7 @@
   "build": {
     "appId": "com.arrowx.vpn",
     "productName": "Arrow VPN",
+    "artifactName": "ArrowVPN-Setup-${version}.${ext}",
     "publish": [
       {
         "provider": "generic",
