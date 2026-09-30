@@ -32,6 +32,8 @@
             "lbl-idioma": "Idioma / Language",
             "lbl-tray": "Minimizar a la bandeja",
             "lbl-auto": "Conexión automática",
+            "lbl-ipv6-auto": "IPv6 automático",
+            "ipv6-change-disabled": "Desconecta la VPN para cambiar IPv6",
             "lbl-sec": "Seguridad Avanzada",
             "lbl-kill": "Kill Switch (Bloqueo)",
             "btn-volver": "Volver",
@@ -48,10 +50,18 @@
             "msg-vpn-activa": "VPN Activa",
             "msg-proxy-activo": "Proxy Activo",
             "msg-conectando": "CONECTANDO...",
+            "msg-cancelar": "CANCELAR",
             "msg-apagando": "APAGANDO...",
+            "status-cancelando": "Cancelando conexión...",
+            "status-intento": "Intento {attempt} de {max}...",
+            "status-reintentando": "Reintentando conexión...",
+            "msg-reintento": "⚠️ Intento {attempt} de {max} falló. Reintentando...",
+            "error-card-title": "Problema de conexión",
+            "error-card-close": "Cerrar",
             "msg-sesion-iniciada": "✓ Sesión iniciada",
             "msg-desconectado": "Desconectado",
             "msg-conexion-establecida": "✓ Conexión establecida",
+            "msg-health-verified": "✓ Acceso a Internet verificado",
             "msg-verificando": "Verificando...",
             "msg-autenticando": "Autenticando...",
 
@@ -120,6 +130,8 @@
             "lbl-idioma": "Language / Idioma",
             "lbl-tray": "Minimize to tray",
             "lbl-auto": "Auto-connect",
+            "lbl-ipv6-auto": "Automatic IPv6",
+            "ipv6-change-disabled": "Disconnect the VPN to change IPv6",
             "lbl-sec": "Advanced Security",
             "lbl-kill": "Kill Switch (Block)",
             "btn-volver": "Back",
@@ -136,10 +148,18 @@
             "msg-vpn-activa": "VPN Active",
             "msg-proxy-activo": "Proxy Active",
             "msg-conectando": "CONNECTING...",
+            "msg-cancelar": "CANCEL",
             "msg-apagando": "DISCONNECTING...",
+            "status-cancelando": "Cancelling connection...",
+            "status-intento": "Attempt {attempt} of {max}...",
+            "status-reintentando": "Retrying connection...",
+            "msg-reintento": "⚠️ Attempt {attempt} of {max} failed. Retrying...",
+            "error-card-title": "Connection problem",
+            "error-card-close": "Close",
             "msg-sesion-iniciada": "✓ Logged in successfully",
             "msg-desconectado": "Disconnected",
             "msg-conexion-establecida": "✓ Connection established",
+            "msg-health-verified": "✓ Internet access verified",
             "msg-verificando": "Verifying...",
             "msg-autenticando": "Authenticating...",
 
@@ -208,6 +228,8 @@
             "lbl-idioma": "Язык / Language",
             "lbl-tray": "Сворачивать в трей",
             "lbl-auto": "Автоподключение",
+            "lbl-ipv6-auto": "Автоматический IPv6",
+            "ipv6-change-disabled": "Отключите VPN, чтобы изменить IPv6",
             "lbl-sec": "Расширенная безопасность",
             "lbl-kill": "Kill Switch (Блокировка)",
             "btn-volver": "Назад",
@@ -224,10 +246,18 @@
             "msg-vpn-activa": "VPN активна",
             "msg-proxy-activo": "Прокси активен",
             "msg-conectando": "ПОДКЛЮЧЕНИЕ...",
+            "msg-cancelar": "ОТМЕНА",
             "msg-apagando": "ОТКЛЮЧЕНИЕ...",
+            "status-cancelando": "Отмена подключения...",
+            "status-intento": "Попытка {attempt} из {max}...",
+            "status-reintentando": "Повторное подключение...",
+            "msg-reintento": "⚠️ Попытка {attempt} из {max} не удалась. Повторяем...",
+            "error-card-title": "Проблема подключения",
+            "error-card-close": "Закрыть",
             "msg-sesion-iniciada": "✓ Вход выполнен",
             "msg-desconectado": "Отключено",
             "msg-conexion-establecida": "✓ Соединение установлено",
+            "msg-health-verified": "✓ Доступ в Интернет подтверждён",
             "msg-verificando": "Проверка...",
             "msg-autenticando": "Аутентификация...",
 
@@ -351,8 +381,10 @@
         });
 
         if (estaConectando) {
-            btnTexto.innerText = t('msg-conectando');
-            statusTextTop.innerText = obtenerTextoInicioConexion();
+            btnTexto.innerText = t('msg-cancelar');
+            statusTextTop.innerText = ultimoIntentoConexion > 0
+                ? t('status-intento', { attempt: ultimoIntentoConexion, max: maxIntentosConexion })
+                : obtenerTextoInicioConexion();
         } else if (estaDesconectando) {
             btnTexto.innerText = t('msg-apagando');
             statusTextTop.innerText = t('status-deteniendo');
@@ -378,11 +410,14 @@
 
         // Repintar la tarjeta de suscripción con el idioma nuevo
         actualizarInfoSuscripcion(expiraSubUI, traficoSubUI);
+        actualizarDisponibilidadIpv6Switch();
     }
 
     let estaConectado = false;
     let estaConectando = false;
     let estaDesconectando = false;
+    let ultimoIntentoConexion = 0;
+    let maxIntentosConexion = 5;
     let modoConexionActual = 'vpn';
     let servidoresDisponibles = {};
     let mapaBanderas = {};  // { 'nl': 'C:\\Users\\...\\banderas\\nl.svg', ... }
@@ -397,6 +432,7 @@
     let isPinging = false;
     let radarInterval = null;
     let timeoutDesconexionId = null;
+    let toastTimeoutId = null;
 
     const pantallaLogin = document.getElementById('pantalla-login');
     const inputSubUrl = document.getElementById('onb-suburl');
@@ -406,8 +442,13 @@
 
     const toggleTray = document.getElementById('toggle-tray');
     const toggleAuto = document.getElementById('toggle-auto');
+    const toggleIpv6Auto = document.getElementById('toggle-ipv6-auto');
+    const rowIpv6Auto = document.getElementById('row-ipv6-auto');
     const toggleKillswitch = document.getElementById('toggle-killswitch');
     const toast = document.getElementById('toast-notificacion');
+    const errorCard = document.getElementById('connection-error-card');
+    const errorCardMessage = document.getElementById('connection-error-message');
+    const errorCardClose = document.getElementById('connection-error-close');
     const menuServidores = document.getElementById('menu-servidores');
     const btnAbrirServidores = document.getElementById('btn-abrir-servidores');
     const btnModoVpn = document.getElementById('btn-modo-vpn');
@@ -416,6 +457,15 @@
     const btnConectar = document.getElementById('btn-conectar');
     const statusTextTop = document.getElementById('main-status-text');
     const btnTexto = document.getElementById('btn-conectar-text');
+
+    function actualizarDisponibilidadIpv6Switch() {
+        const bloqueado = estaConectado || estaConectando || estaDesconectando;
+        toggleIpv6Auto.disabled = bloqueado;
+        rowIpv6Auto.classList.toggle('setting-locked', bloqueado);
+        rowIpv6Auto.title = bloqueado ? t('ipv6-change-disabled') : '';
+    }
+
+    actualizarDisponibilidadIpv6Switch();
 
     // ==========================================
     // LÓGICA DEL CUSTOM SELECT
@@ -507,6 +557,7 @@
             tray: toggleTray.checked,
             autoConnect: toggleAuto.checked,
             killSwitch: toggleKillswitch.checked,
+            ipv6Auto: toggleIpv6Auto.checked,
             connectionMode: modoConexionActual,
             idioma: currentLangValue
         });
@@ -946,7 +997,9 @@
     window.arrow.on('load-settings', (settings) => {
         toggleTray.checked = settings.tray;
         toggleAuto.checked = settings.autoConnect;
+        toggleIpv6Auto.checked = settings.ipv6Auto === true;
         toggleKillswitch.checked = settings.killSwitch;
+        actualizarDisponibilidadIpv6Switch();
 
         if (settings.idioma) {
             currentLangValue = settings.idioma;
@@ -977,19 +1030,47 @@
         }
     });
 
-    [toggleTray, toggleAuto, toggleKillswitch].forEach(toggle => {
+    [toggleTray, toggleAuto, toggleIpv6Auto, toggleKillswitch].forEach(toggle => {
         toggle.addEventListener('change', () => aplicarGuardado(true));
     });
 
-    function mostrarMensaje(texto, esError = false) {
-        toast.innerText = texto;
-        toast.style.background = esError ? "#e74c3c" : "#2ecc71";
-        toast.classList.add('visible');
-
-        setTimeout(() => {
-            toast.classList.remove('visible');
-        }, 3000);
+    function ocultarTarjetaError() {
+        errorCard.classList.remove('visible');
     }
+
+    function mostrarTarjetaError(texto) {
+        if (toastTimeoutId) {
+            clearTimeout(toastTimeoutId);
+            toastTimeoutId = null;
+        }
+        toast.classList.remove('visible');
+        errorCardMessage.innerText = String(texto || '').replace(/^❌\s*/, '');
+        errorCard.classList.add('visible');
+    }
+
+    function mostrarMensaje(texto, esError = false, tipo = '') {
+        const mensaje = String(texto || '');
+        const tono = tipo || (esError ? 'error' : 'success');
+
+        if (tono === 'error' && (mensaje.length > 72 || mensaje.includes('\n'))) {
+            mostrarTarjetaError(mensaje);
+            return;
+        }
+
+        if (tono !== 'error') ocultarTarjetaError();
+        if (toastTimeoutId) clearTimeout(toastTimeoutId);
+
+        toast.innerText = mensaje;
+        toast.classList.remove('success', 'warning', 'error');
+        toast.classList.add(tono, 'visible');
+
+        toastTimeoutId = setTimeout(() => {
+            toast.classList.remove('visible');
+            toastTimeoutId = null;
+        }, tono === 'warning' ? 3600 : 3000);
+    }
+
+    errorCardClose.addEventListener('click', ocultarTarjetaError);
 
     const btnAyuda = document.getElementById('btn-ayuda');
     const btnAjustes = document.getElementById('btn-ajustes');
@@ -1031,7 +1112,22 @@
             gestionarRadar(false);
         }
 
-        if (estaConectando || estaDesconectando) return;
+        if (estaDesconectando) return;
+
+        if (estaConectando) {
+            estaDesconectando = true;
+            actualizarDisponibilidadIpv6Switch();
+            btnConectar.className = 'btn-conectar desconectando';
+            btnTexto.innerText = t('msg-apagando');
+            statusTextTop.innerText = t('status-cancelando');
+            window.arrow.send('desconectar-vpn');
+
+            if (timeoutDesconexionId) clearTimeout(timeoutDesconexionId);
+            timeoutDesconexionId = setTimeout(() => {
+                if (estaDesconectando) forzarDesconexionUI(false);
+            }, 8000);
+            return;
+        }
 
         if (!estaConectado) {
             if (!servidorSeleccionado) {
@@ -1042,15 +1138,20 @@
             aplicarGuardado(false);
 
             estaConectando = true;
+            actualizarDisponibilidadIpv6Switch();
+            ultimoIntentoConexion = 0;
+            maxIntentosConexion = 5;
+            ocultarTarjetaError();
             toggleKillswitch.disabled = true;
 
             btnConectar.className = 'btn-conectar conectando';
-            btnTexto.innerText = t('msg-conectando');
+            btnTexto.innerText = t('msg-cancelar');
             statusTextTop.innerText = obtenerTextoInicioConexion();
 
             window.arrow.send('conectar-vpn', { serverId: servidorSeleccionado });
         } else {
             estaDesconectando = true;
+            actualizarDisponibilidadIpv6Switch();
 
             btnConectar.className = 'btn-conectar desconectando';
             btnTexto.innerText = t('msg-apagando');
@@ -1076,6 +1177,8 @@
         estaConectado = false;
         estaConectando = false;
         estaDesconectando = false;
+        actualizarDisponibilidadIpv6Switch();
+        ultimoIntentoConexion = 0;
 
         toggleKillswitch.disabled = false;
 
@@ -1085,17 +1188,43 @@
 
         btnTexto.innerText = t('btn-conectar');
         statusTextTop.innerText = t('status-inactivo');
+        ocultarTarjetaError();
 
         if (mostrarToastDesconexion) mostrarMensaje(t('msg-desconectado'));
     }
 
-    window.arrow.on('vpn-conectada-exito', () => {
-        if (!estaConectando) return;
+    window.arrow.on('vpn-conexion-intento', (info = {}) => {
+        if (!estaConectando || estaDesconectando) return;
+        ultimoIntentoConexion = Number(info.attempt) || 1;
+        maxIntentosConexion = Number(info.maxAttempts) || 5;
+        btnConectar.className = 'btn-conectar conectando';
+        btnTexto.innerText = t('msg-cancelar');
+        statusTextTop.innerText = t('status-intento', {
+            attempt: ultimoIntentoConexion,
+            max: maxIntentosConexion
+        });
+    });
 
-        // El proceso principal ya validó puerto/TUN + health-check; no hay razón
-        // para añadir una espera artificial en el renderer.
+    window.arrow.on('vpn-conexion-reintento', (info = {}) => {
+        if (!estaConectando || estaDesconectando) return;
+        const attempt = Number(info.attempt) || ultimoIntentoConexion || 1;
+        const maxAttempts = Number(info.maxAttempts) || maxIntentosConexion || 5;
+        ultimoIntentoConexion = attempt;
+        maxIntentosConexion = maxAttempts;
+        statusTextTop.innerText = t('status-reintentando');
+        mostrarMensaje(t('msg-reintento', { attempt, max: maxAttempts }), false, 'warning');
+    });
+
+    window.arrow.on('vpn-conectada-exito', () => {
+        if (!estaConectando || estaDesconectando) return;
+
+        // El proceso principal ya validó motor + puerto/TUN. El health-check
+        // externo corre después y nunca bloquea este estado CONNECTED.
         estaConectando = false;
         estaConectado = true;
+        actualizarDisponibilidadIpv6Switch();
+        ultimoIntentoConexion = 0;
+        ocultarTarjetaError();
 
         btnConectar.className = 'btn-conectar protegido';
         statusTextTop.classList.add('protegido');
@@ -1107,13 +1236,27 @@
         mostrarMensaje(t('msg-conexion-establecida'));
     });
 
+    window.arrow.on('vpn-health-verificado', () => {
+        if (!estaConectado || estaDesconectando) return;
+        mostrarMensaje(t('msg-health-verified'));
+    });
+
     window.arrow.on('vpn-desconectada-exito', () => {
         forzarDesconexionUI(true);
     });
 
-    window.arrow.on('error-suscripcion', (mensaje) => {
+    window.arrow.on('error-suscripcion', (payload) => {
+        const mensaje = payload && typeof payload === 'object'
+            ? String(payload.message || '')
+            : String(payload || '');
+        const forceCard = Boolean(payload && typeof payload === 'object' && payload.forceCard);
+
         forzarDesconexionUI(false);
-        mostrarMensaje(`❌ ${mensaje}`, true);
+        if (forceCard) {
+            mostrarTarjetaError(`❌ ${mensaje}`);
+        } else {
+            mostrarMensaje(`❌ ${mensaje}`, true);
+        }
     });
 
     const btnMin = document.getElementById('btn-minimizar');

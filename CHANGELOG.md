@@ -1,3 +1,22 @@
+# 3.1.4 — Non-blocking connection health verification
+
+- `CONNECTED` now means the VPN engine and TUN/local proxy are ready; external HTTP probes no longer gate the connection.
+- Internet verification runs 1.5 seconds later in the background against Firefox, Microsoft and Apple connectivity endpoints.
+- A failed external health check is logged internally only; it does not show a user warning, tear down, or retry a working tunnel.
+- Five automatic retries remain for genuine startup/TUN/handshake/core failures.
+- Added explicit VERIFIED / DEGRADED health state tracking; failed verification remains internal/log-only.
+- Manual update downloads now use the full OTA mirror failover chain instead of downloading only from the currently selected provider.
+
+# 3.1.3 — Connection retry + compact error UI patch
+
+- Added up to 5 automatic retries for transient connection/handshake/health-check failures.
+- The Connect button becomes Cancel while a connection attempt is active.
+- Retry waits are cancellable and preserve Kill Switch protection between attempts.
+- End-to-end connectivity probes now run concurrently to reduce worst-case health-check latency.
+- Short notices remain compact toasts; long connection errors use a non-blocking floating error card.
+- Added localized retry/error-card UI for Spanish, English and Russian.
+- Added regression tests for retries, cancellation, Kill Switch handling and long-error presentation.
+
 # 3.1.3 — Update infrastructure failover
 
 - Replaced the hardcoded `https://de.arrow-x.org:7777/descargas` updater endpoint.

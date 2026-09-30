@@ -165,6 +165,14 @@
                     <span class="slider"></span>
                 </label>
             </div>
+
+            <div class="toggle-row" id="row-ipv6-auto">
+                <span class="setting-label" data-i18n="lbl-ipv6-auto">IPv6 automático</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-ipv6-auto">
+                    <span class="slider"></span>
+                </label>
+            </div>
         </div>
 
         <div class="setting-group" style="margin-bottom: 20px;">
@@ -198,6 +206,15 @@
         <div class="panel-botones">
             <button class="panel-btn-cerrar" id="btn-volver-ajustes" data-i18n="btn-volver-ajustes">Volver a Ajustes</button>
         </div>
+    </div>
+
+    <div class="connection-error-card" id="connection-error-card" role="alert" aria-live="assertive">
+        <div class="connection-error-icon">!</div>
+        <div class="connection-error-content">
+            <div class="connection-error-title" id="connection-error-title" data-i18n="error-card-title">Problema de conexión</div>
+            <div class="connection-error-message" id="connection-error-message"></div>
+        </div>
+        <button class="connection-error-close" id="connection-error-close" type="button" data-i18n-title="error-card-close" title="Cerrar">×</button>
     </div>
 
     <div class="toast" id="toast-notificacion">✓ Copiado al portapapeles</div>

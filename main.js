@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import { spawn, execSync, spawnSync } from 'node:child_process';
 import * as os from 'node:os';
 import * as net from 'node:net';
+import * as tls from 'node:tls';
 import { promises as dns } from 'node:dns';
 import { fileURLToPath } from 'node:url';
 import * as subscription from './subscription.js';
@@ -216,6 +217,10 @@ trustedIpcHandle('clipboard-write', (_event, text) => {
 
 // Estado único del ciclo de red. Evita Connect/Disconnect concurrentes.
 let networkState = 'DISCONNECTED';
+let connectionHealthState = 'UNKNOWN';
+let connectionOperationId = 0;
+const MAX_CONNECT_ATTEMPTS = 5;
+const CONNECT_RETRY_DELAYS_MS = [0, 1500, 2500, 4000, 6000];
 let cleanupPromise = null;
 let networkSetupProcess = null;
 let monitorRecoveryInProgress = false;
@@ -230,6 +235,12 @@ let activeNetworkMode = null;
 let motorLXValidationCache = null;
 const reachabilityCache = new Map();
 const REACHABILITY_CACHE_TTL_MS = 20_000;
+const ipv6CapabilityCache = new Map();
+const IPV6_CAPABILITY_CACHE_TTL_MS = 10 * 60_000;
+const IPV6_PROBE_TARGET_BYTES = Buffer.from([
+    0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x11
+]); // 2606:4700:4700::1111
 
 // ==========================================
 // MAGIA STEALTH: Puerto base, mutará al conectar
@@ -240,6 +251,7 @@ const configEnMemoriaInicial = {
     tray: true,
     autoConnect: false,
     killSwitch: false,
+    ipv6Auto: false,
     connectionMode: 'vpn',
     // --- NUEVO MODELO: suscripción en vez de uuid/password ---
     subUrlCifrada: '',        // la URL cifrada con safeStorage
@@ -292,6 +304,7 @@ const i18nMain = {
         'err-engine-config': 'El motor rechazó la configuración del nodo.',
         'err-reality': 'REALITY no pudo autenticar este nodo. Revisa versión del servidor, claves y key share.',
         'err-health': 'El túnel inició, pero no logró pasar tráfico de Internet.',
+        'err-retries-exhausted': 'No fue posible establecer una conexión estable después de 5 intentos.',
         'err-secure-storage': 'Windows no permite cifrar las credenciales de forma segura.',
 
         // Pérdida de conexión (monitor)
@@ -365,6 +378,7 @@ const i18nMain = {
         'err-engine-config': 'The engine rejected the node configuration.',
         'err-reality': 'REALITY could not authenticate this node. Check server version, keys and key share.',
         'err-health': 'The tunnel started, but Internet traffic did not pass through it.',
+        'err-retries-exhausted': 'A stable connection could not be established after 5 attempts.',
         'err-secure-storage': 'Windows secure credential encryption is unavailable.',
 
         // Connection loss (monitor)
@@ -438,6 +452,7 @@ const i18nMain = {
         'err-engine-config': 'Движок отклонил конфигурацию узла.',
         'err-reality': 'REALITY не смог аутентифицировать узел. Проверьте версию сервера, ключи и key share.',
         'err-health': 'Туннель запущен, но интернет-трафик через него не проходит.',
+        'err-retries-exhausted': 'Не удалось установить стабильное соединение после 5 попыток.',
         'err-secure-storage': 'Безопасное шифрование учётных данных Windows недоступно.',
 
         // Потеря соединения (монитор)
@@ -490,6 +505,7 @@ const rutaBinarios = app.isPackaged
 // APUNTAMOS AL NUEVO MOTOR: SING-BOX
 const singboxPath = path.join(rutaBinarios, 'sing-box.exe');
 const configJsonPath = path.join(app.getPath('userData'), 'config.json');
+const ipv6ProbeConfigPath = path.join(app.getPath('userData'), 'ipv6_probe.json');
 const singboxLogPath = path.join(app.getPath('userData'), 'singbox_error.log');
 const appErrorLogPath = path.join(app.getPath('userData'), 'app_error.log');
 const networkSnapshotPath = path.join(app.getPath('userData'), 'network_snapshot.json');
@@ -575,6 +591,7 @@ function getSettings() {
         tray: (saved.tray === false || saved.tray === 'false') ? false : true,
         autoConnect: (saved.autoConnect === true || saved.autoConnect === 'true'),
         killSwitch: (saved.killSwitch === true || saved.killSwitch === 'true'),
+        ipv6Auto: (saved.ipv6Auto === true || saved.ipv6Auto === 'true'),
         connectionMode: saved.connectionMode || 'vpn',
         idioma: saved.idioma || null
     };
@@ -607,6 +624,7 @@ function settingsPublicos() {
         tray: configEnMemoria.tray,
         autoConnect: configEnMemoria.autoConnect,
         killSwitch: configEnMemoria.killSwitch,
+        ipv6Auto: configEnMemoria.ipv6Auto,
         connectionMode: configEnMemoria.connectionMode,
         idioma: configEnMemoria.idioma,
         servidores: servidoresPublicos()
@@ -633,6 +651,7 @@ function persistirSettings({ persistServers = true } = {}) {
         tray: configEnMemoria.tray !== false,
         autoConnect: Boolean(configEnMemoria.autoConnect),
         killSwitch: Boolean(configEnMemoria.killSwitch),
+        ipv6Auto: Boolean(configEnMemoria.ipv6Auto),
         connectionMode: configEnMemoria.connectionMode || 'vpn',
         idioma: configEnMemoria.idioma || 'en'
     };
@@ -668,10 +687,15 @@ function asegurarIdiomaInicial() {
 }
 
 
+const APP_WINDOW_WIDTH = 380;
+const APP_WINDOW_HEIGHT = 600;
+
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 380,
-        height: 600,
+        width: APP_WINDOW_WIDTH,
+        height: APP_WINDOW_HEIGHT,
+        minWidth: APP_WINDOW_WIDTH,
+        minHeight: APP_WINDOW_HEIGHT,
         frame: false,
         transparent: true,
         backgroundColor: '#00000000',
@@ -742,7 +766,6 @@ function resumirErrorParaUI(errorMsg, modo = 'vpn') {
     if (txt.includes('sing-box-lx_required') || txt.includes('sing-box-lx_too_old')) return t('err-engine-lx');
     if (txt.includes('config_check_failed') || txt.includes('check -c')) return t('err-engine-config');
     if (txt.includes('reality verification failed') || txt.includes('reality key_share') || txt.includes('reality handshake')) return t('err-reality');
-    if (txt.includes('health_check_failed')) return t('err-health');
     if (txt.includes('secure_storage_unavailable')) return t('err-secure-storage');
     if (txt.includes('timeout esperando puerto')) return modo === 'proxy' ? t('err-proxy-local') : t('err-vpn-internal');
     if (txt.includes('adaptador tun')) return t('err-vpn-adapter');
@@ -1162,17 +1185,32 @@ async function limpiarArtefactosArrow({ flushDns = true, removeTunRoutes = true,
     return ok;
 }
 
-async function aplicarConfiguracionTun() {
+async function aplicarConfiguracionTun(ipv6Activo = false) {
+    const ipv6Setup = ipv6Activo ? `
+        netsh interface ipv6 set dnsservers "ArrowTUN" static 2606:4700:4700::1111 validate=no | Out-Null
+        netsh interface ipv6 set interface "ArrowTUN" metric=1 | Out-Null
+    ` : `
+        netsh interface ipv6 delete dnsservers "ArrowTUN" all | Out-Null
+        Get-NetIPAddress -InterfaceAlias 'ArrowTUN' -AddressFamily IPv6 -ErrorAction SilentlyContinue |
+            Where-Object {$_.IPAddress -notlike 'fe80:*'} |
+            Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+        Get-NetRoute -InterfaceAlias 'ArrowTUN' -AddressFamily IPv6 -ErrorAction SilentlyContinue |
+            Where-Object {$_.DestinationPrefix -eq '::/0' -or $_.DestinationPrefix -like 'fdfe:dcba:9876::*'} |
+            Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+    `;
+    const nrptServers = ipv6Activo
+        ? "'1.1.1.1','2606:4700:4700::1111'"
+        : "'1.1.1.1'";
+
     const ps = `
         $ErrorActionPreference = 'Stop'
         netsh interface ip set address "ArrowTUN" static 172.19.0.2 255.255.255.0 172.19.0.1 | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'IPv4 address setup failed' }
         netsh interface ip set dns "ArrowTUN" static 1.1.1.1 validate=no | Out-Null
-        netsh interface ipv6 set dnsservers "ArrowTUN" static 2606:4700:4700::1111 validate=no | Out-Null
         netsh interface ipv4 set interface "ArrowTUN" metric=1 | Out-Null
-        netsh interface ipv6 set interface "ArrowTUN" metric=1 | Out-Null
+        ${ipv6Setup}
         Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object {$_.Comment -eq 'ArrowVPN'} | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue
-        Add-DnsClientNrptRule -Namespace '.' -NameServers '1.1.1.1','2606:4700:4700::1111' -Comment 'ArrowVPN' -ErrorAction Stop | Out-Null
+        Add-DnsClientNrptRule -Namespace '.' -NameServers ${nrptServers} -Comment 'ArrowVPN' -ErrorAction Stop | Out-Null
         Clear-DnsClientCache
     `;
 
@@ -1806,7 +1844,7 @@ async function iniciarSingbox(configPath) {
         });
 
         // No esperamos un timeout fijo: desde aquí el readiness real lo decide
-        // el puerto/TUN y luego el health-check end-to-end.
+        // el puerto/TUN. La verificación HTTP es posterior y no bloqueante.
         proxyProcess.once('spawn', () => {
             if (settled) return;
             settled = true;
@@ -1827,26 +1865,128 @@ function borrarConfigTemporal() {
 }
 
 async function probarSaludTunel() {
+    // Estos probes son deliberadamente externos e independientes de la
+    // infraestructura Arrow. Sirven para estimar si hay salida a Internet,
+    // pero NO forman parte del criterio que mantiene vivo el túnel.
     const urls = [
         'https://detectportal.firefox.com/success.txt',
         'https://www.msftconnecttest.com/connecttest.txt',
         'https://captive.apple.com/hotspot-detect.html'
     ];
-    const errores = [];
-    for (const url of urls) {
-        const args = ['-L', '-sS', '--connect-timeout', '4', '--max-time', '8', '-o', 'NUL', '-w', '%{http_code}'];
+
+    // Se ejecutan en paralelo: un fallo completo tarda como máximo lo que tarda
+    // el probe más lento. Un único 2xx/3xx basta para considerar Internet visible.
+    const resultados = await Promise.all(urls.map(async url => {
+        const args = ['-L', '-sS', '--connect-timeout', '3', '--max-time', '6', '-o', 'NUL', '-w', '%{http_code}'];
         if (configEnMemoria.connectionMode === 'proxy') args.push('--proxy', `http://127.0.0.1:${puertoStealthLocal}`);
         args.push(url);
         try {
-            const r = await ejecutarComandoCapturando('curl.exe', args, { timeoutMs: 10000 });
+            const r = await ejecutarComandoCapturando('curl.exe', args, { timeoutMs: 8000 });
             const code = Number.parseInt(String(r.stdout || '').trim().slice(-3), 10);
-            if (r.code === 0 && code >= 200 && code < 400) return true;
-            errores.push(`${url}: code=${r.code}, http=${code || 0}, ${r.stderr || ''}`);
+            return {
+                url,
+                ok: r.code === 0 && code >= 200 && code < 400,
+                code: r.code,
+                httpCode: code || 0,
+                error: r.stderr || ''
+            };
         } catch (e) {
-            errores.push(`${url}: ${e.message || e}`);
+            return { url, ok: false, code: -1, httpCode: 0, error: e.message || String(e) };
         }
+    }));
+
+    return {
+        ok: resultados.some(r => r.ok),
+        resultados
+    };
+}
+
+async function verificarSaludTunelEnSegundoPlano(operationId) {
+    connectionHealthState = 'VERIFYING';
+
+    // Deja que Windows termine de asentar rutas/DNS antes de probar salida.
+    // Esta espera nunca bloquea CONNECTED ni el botón de la UI.
+    await sleep(1500);
+    if (operationId !== connectionOperationId || !isVpnConnected || networkState !== 'CONNECTED') return;
+
+    try {
+        const reporte = await probarSaludTunel();
+        if (operationId !== connectionOperationId || !isVpnConnected || networkState !== 'CONNECTED') return;
+
+        if (reporte.ok) {
+            connectionHealthState = 'VERIFIED';
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('vpn-health-verificado');
+            }
+            return;
+        }
+
+        connectionHealthState = 'DEGRADED';
+        const detalle = reporte.resultados
+            .map(r => `${r.url}: code=${r.code}, http=${r.httpCode}, ${r.error || ''}`)
+            .join(' | ');
+        registrarErrorApp('health-check-background', detalle);
+    } catch (e) {
+        // Un error del verificador jamás debe tumbar una VPN que ya está activa.
+        connectionHealthState = 'DEGRADED';
+        registrarErrorApp('health-check-background-exception', e.stack || e.message || String(e));
     }
-    throw new Error(`health_check_failed: ${errores.join(' | ')}`);
+}
+
+function esErrorConexionReintentable(errorMsg) {
+    const txt = String(errorMsg || '').toLowerCase();
+    const permanentes = [
+        'sing-box-lx_missing',
+        'sing-box-lx_required',
+        'sing-box-lx_too_old',
+        'config_check_failed',
+        'config_generation_failed',
+        'secure_storage_unavailable',
+        'suscripción expirada',
+        'subscription expired',
+        'invalid_node_uri',
+        'llave del nodo inválida',
+        'unsupported_node',
+        'kill_switch_snapshot_failed',
+        'kill_switch_enable_failed',
+        'kill_switch_tun_failed'
+    ];
+    if (permanentes.some(marker => txt.includes(marker))) return false;
+
+    const reintentables = [
+        'reality verification failed',
+        'reality handshake',
+        'tls handshake',
+        'handshake failed',
+        'connection reset',
+        'connection refused',
+        'network is unreachable',
+        'context deadline exceeded',
+        'i/o timeout',
+        'timeout esperando puerto',
+        'adaptador tun',
+        'sing-box terminó antes',
+        'sing-box terminó inmediatamente',
+        'dns:',
+        'dns_timeout',
+        'server unreachable'
+    ];
+    return reintentables.some(marker => txt.includes(marker));
+}
+
+function asegurarOperacionConexionActiva(operationId) {
+    if (operationId !== connectionOperationId || networkState === 'DISCONNECTING') {
+        throw new Error('connection_cancelled');
+    }
+}
+
+async function esperarReintentoCancelable(operationId, delayMs) {
+    const deadline = Date.now() + Math.max(0, delayMs || 0);
+    while (Date.now() < deadline) {
+        asegurarOperacionConexionActiva(operationId);
+        await sleep(Math.min(150, deadline - Date.now()));
+    }
+    asegurarOperacionConexionActiva(operationId);
 }
 
 function iniciarMonitorSingbox() {
@@ -1859,6 +1999,7 @@ function iniciarMonitorSingbox() {
             if (!proxyProcess || proxyProcess.killed || proxyProcess.exitCode !== null) {
                 monitorRecoveryInProgress = true;
                 isVpnConnected = false;
+                connectionHealthState = 'UNKNOWN';
                 clearInterval(monitorInterval);
                 monitorInterval = null;
 
@@ -2032,7 +2173,153 @@ trustedIpcOn('borrar-suscripcion', () => {
     try { persistirSettings(); } catch (e) { registrarErrorApp('subscription-delete-store', e.message || String(e)); }
 });
 
-function generarConfigSingbox(nodeUri, nodeIP) {
+
+function claveCapacidadIPv6(serverId, node, nodeIP) {
+    return [serverId || '', node?.protocol || '', node?.host || '', node?.port || '', nodeIP || ''].join('|');
+}
+
+function probarIPv6ViaSocks5(port, timeoutMs = 6500) {
+    // Importante: un SOCKS CONNECT exitoso solo demuestra que sing-box/VLESS
+    // aceptó la solicitud. VLESS puede aceptar el destino antes de que el
+    // servidor remoto consiga abrirlo. Para declarar IPv6 funcional exigimos
+    // tráfico real de extremo a extremo: un handshake TLS sobre la IPv6.
+    return new Promise(resolve => {
+        const socket = new net.Socket();
+        let tlsSocket = null;
+        let stage = 'greeting';
+        let buffer = Buffer.alloc(0);
+        let finished = false;
+
+        const finish = ok => {
+            if (finished) return;
+            finished = true;
+            try { tlsSocket?.destroy(); } catch (_) {}
+            try { socket.destroy(); } catch (_) {}
+            resolve(Boolean(ok));
+        };
+
+        const startTlsProof = () => {
+            socket.removeListener('data', onData);
+            socket.setTimeout(0);
+            try {
+                tlsSocket = tls.connect({
+                    socket,
+                    servername: 'cloudflare-dns.com',
+                    rejectUnauthorized: true,
+                    ALPNProtocols: ['http/1.1']
+                });
+                tlsSocket.setTimeout(timeoutMs);
+                tlsSocket.once('secureConnect', () => finish(true));
+                tlsSocket.once('timeout', () => finish(false));
+                tlsSocket.once('error', () => finish(false));
+            } catch (_) {
+                finish(false);
+            }
+        };
+
+        const onData = data => {
+            buffer = Buffer.concat([buffer, data]);
+
+            if (stage === 'greeting' && buffer.length >= 2) {
+                if (buffer[0] !== 0x05 || buffer[1] !== 0x00) return finish(false);
+                buffer = Buffer.alloc(0);
+                stage = 'connect';
+                const request = Buffer.concat([
+                    Buffer.from([0x05, 0x01, 0x00, 0x04]),
+                    IPV6_PROBE_TARGET_BYTES,
+                    Buffer.from([0x01, 0xbb]) // TCP/443
+                ]);
+                socket.write(request);
+                return;
+            }
+
+            if (stage === 'connect' && buffer.length >= 4) {
+                if (buffer[0] !== 0x05 || buffer[1] !== 0x00) return finish(false);
+
+                // Consumir la respuesta SOCKS completa antes de entregar el
+                // socket a TLS. Si empezamos TLS tras solo VER+REP, los bytes
+                // restantes de BND.ADDR/BND.PORT se interpretarían como TLS.
+                const atyp = buffer[3];
+                let replyLength = 0;
+                if (atyp === 0x01) replyLength = 10;       // IPv4
+                else if (atyp === 0x04) replyLength = 22;  // IPv6
+                else if (atyp === 0x03) {
+                    if (buffer.length < 5) return;
+                    replyLength = 7 + buffer[4];            // domain
+                } else {
+                    return finish(false);
+                }
+                if (buffer.length < replyLength) return;
+
+                stage = 'tls-proof';
+                startTlsProof();
+            }
+        };
+
+        socket.setTimeout(timeoutMs);
+        socket.once('timeout', () => finish(false));
+        socket.once('error', () => finish(false));
+        socket.on('data', onData);
+        socket.connect(port, '127.0.0.1', () => {
+            socket.write(Buffer.from([0x05, 0x01, 0x00]));
+        });
+    });
+}
+
+function generarConfigProbeIPv6(nodeUri, nodeIP, probePort) {
+    const node = protocols.parseNodeUri(nodeUri);
+    if (!node) throw new Error('unsupported_node');
+    const proxyOutbound = protocols.buildProxyOutbound(node, nodeIP);
+    const nodeCIDR = nodeIP.includes(':') ? `${nodeIP}/128` : `${nodeIP}/32`;
+    const config = {
+        log: { level: 'warn', output: singboxLogPath },
+        inbounds: [{ type: 'mixed', tag: 'ipv6-probe-in', listen: '127.0.0.1', listen_port: probePort }],
+        outbounds: [proxyOutbound, { type: 'direct', tag: 'direct' }],
+        route: {
+            auto_detect_interface: true,
+            final: 'proxy',
+            rules: [
+                { ip_cidr: ['127.0.0.0/8', '::1/128', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '224.0.0.0/4', '255.255.255.255/32', 'fc00::/7', 'fe80::/10', 'ff00::/8'], action: 'route', outbound: 'direct' },
+                { ip_cidr: [nodeCIDR], action: 'route', outbound: 'direct' }
+            ]
+        }
+    };
+    fs.writeFileSync(ipv6ProbeConfigPath, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
+}
+
+async function detectarSoporteIPv6Nodo(serverId, node, nodeIP, operationId) {
+    if (!configEnMemoria.ipv6Auto || configEnMemoria.connectionMode !== 'vpn') return false;
+
+    const key = claveCapacidadIPv6(serverId, node, nodeIP);
+    const cached = ipv6CapabilityCache.get(key);
+    if (cached && Date.now() - cached.at < IPV6_CAPABILITY_CACHE_TTL_MS) {
+        return cached.supported;
+    }
+
+    const probePort = Math.floor(Math.random() * (60000 - 20000 + 1)) + 20000;
+    let supported = false;
+    try {
+        asegurarOperacionConexionActiva(operationId);
+        generarConfigProbeIPv6(node.uri || node.raw || '', nodeIP, probePort);
+        await iniciarSingbox(ipv6ProbeConfigPath);
+        await esperarPuerto('127.0.0.1', probePort, 7000);
+        asegurarOperacionConexionActiva(operationId);
+        supported = await probarIPv6ViaSocks5(probePort);
+        console.log(`[IPv6] node capability -> ${supported ? 'dual-stack' : 'IPv4-only'}`);
+    } catch (e) {
+        console.log(`[IPv6] capability probe failed; using IPv4 fallback: ${e.message || e}`);
+        supported = false;
+    } finally {
+        await detenerSingbox();
+        try { if (fs.existsSync(ipv6ProbeConfigPath)) fs.unlinkSync(ipv6ProbeConfigPath); } catch (_) {}
+    }
+
+    asegurarOperacionConexionActiva(operationId);
+    ipv6CapabilityCache.set(key, { supported, at: Date.now() });
+    return supported;
+}
+
+function generarConfigSingbox(nodeUri, nodeIP, { ipv6Activo = false } = {}) {
     try {
         const node = protocols.parseNodeUri(nodeUri);
         if (!node) throw new Error('unsupported_node');
@@ -2047,10 +2334,11 @@ function generarConfigSingbox(nodeUri, nodeIP) {
             log: { level: 'warn', output: singboxLogPath },
             dns: {
                 reverse_mapping: true,
+                strategy: ipv6Activo ? 'prefer_ipv4' : 'ipv4_only',
                 servers: [
                     { type: 'local', tag: 'dns-local' },
                     { type: 'https', tag: 'dns-remote-v4', server: '1.1.1.1', server_port: 443, path: '/dns-query', detour: 'proxy' },
-                    { type: 'https', tag: 'dns-remote-v6', server: '2606:4700:4700::1111', server_port: 443, path: '/dns-query', detour: 'proxy' }
+                    ...(ipv6Activo ? [{ type: 'https', tag: 'dns-remote-v6', server: '2606:4700:4700::1111', server_port: 443, path: '/dns-query', detour: 'proxy' }] : [])
                 ],
                 final: 'dns-remote-v4'
             },
@@ -2072,7 +2360,9 @@ function generarConfigSingbox(nodeUri, nodeIP) {
         } else {
             config.inbounds = [{
                 type: 'tun', tag: 'tun-in', interface_name: 'ArrowTUN', mtu: 1500,
-                address: ['172.19.0.2/24', 'fdfe:dcba:9876::2/64'],
+                address: ipv6Activo
+                    ? ['172.19.0.2/24', 'fdfe:dcba:9876::2/64']
+                    : ['172.19.0.2/24'],
                 auto_route: true, strict_route: true, stack: 'system'
             }];
         }
@@ -2103,15 +2393,22 @@ trustedIpcOn('conectar-vpn', async (event, payload) => {
     }
 
     const perf = crearTrazaRendimiento('connect');
+    const operationId = ++connectionOperationId;
     setNetworkState('CONNECTING', 'user-connect');
     desconexionManual = false;
 
     let serverId = '';
+    let selected = null;
+    let node = null;
+    let nodeIP = null;
+    let attemptsPerformed = 0;
+    let lastError = null;
+
     try {
         serverId = payload?.serverId || '';
-        const selected = serverId ? configEnMemoria.servidores?.[serverId] : null;
+        selected = serverId ? configEnMemoria.servidores?.[serverId] : null;
         if (!selected?.uri) throw new Error('Llave del nodo inválida.');
-        const node = protocols.parseNodeUri(selected.uri);
+        node = protocols.parseNodeUri(selected.uri);
         if (!node) throw new Error('invalid_node_uri');
 
         validarMotorLX();
@@ -2124,78 +2421,159 @@ trustedIpcOn('conectar-vpn', async (event, payload) => {
             throw new Error('Suscripción expirada');
         }
 
-        const cachedIP = obtenerIpRadarReciente(serverId, node);
-        const nodeIP = cachedIP || await resolverIP(node.host, node.port, { probeTcp: !protocols.isUdpNativeProtocol(node) });
-        perf.mark(cachedIP ? 'node address reused from radar' : 'node address resolved');
+        nodeIP = obtenerIpRadarReciente(serverId, node) || null;
 
-        if (networkState !== 'CONNECTING') throw new Error('connection_cancelled');
-        if (!nodeIP) throw new Error('dns: server unreachable');
+        for (let attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt += 1) {
+            attemptsPerformed = attempt;
+            asegurarOperacionConexionActiva(operationId);
+            setNetworkState('CONNECTING', attempt === 1 ? 'attempt-1' : `retry-${attempt}`);
+            desconexionManual = false;
 
-        if (!generarConfigSingbox(selected.uri, nodeIP)) throw new Error('config_generation_failed');
-        perf.mark('config generated');
+            event.reply('vpn-conexion-intento', {
+                attempt,
+                maxAttempts: MAX_CONNECT_ATTEMPTS
+            });
 
-        await prepararRedAntesDeConexion();
-        perf.mark('windows network prepared');
+            try {
+                if (!nodeIP) {
+                    nodeIP = await resolverIP(node.host, node.port, { probeTcp: !protocols.isUdpNativeProtocol(node) });
+                    perf.mark('node address resolved');
+                } else if (attempt === 1) {
+                    perf.mark('node address reused from radar');
+                }
 
-        if (networkState !== 'CONNECTING') throw new Error('connection_cancelled');
-        if (configEnMemoria.killSwitch) {
-            await activarKillSwitchBase();
-            perf.mark('kill switch enabled');
+                asegurarOperacionConexionActiva(operationId);
+                if (!nodeIP) throw new Error('dns: server unreachable');
+
+                const ipv6Activo = await detectarSoporteIPv6Nodo(serverId, { ...node, uri: selected.uri }, nodeIP, operationId);
+                perf.mark(`attempt ${attempt}: IPv6 ${ipv6Activo ? 'enabled' : 'disabled'}`);
+
+                if (!generarConfigSingbox(selected.uri, nodeIP, { ipv6Activo })) throw new Error('config_generation_failed');
+                perf.mark(`attempt ${attempt}: config generated`);
+
+                await prepararRedAntesDeConexion();
+                perf.mark(`attempt ${attempt}: windows network prepared`);
+
+                asegurarOperacionConexionActiva(operationId);
+                if (configEnMemoria.killSwitch) {
+                    await activarKillSwitchBase();
+                    perf.mark(`attempt ${attempt}: kill switch enabled`);
+                }
+
+                await iniciarSingbox(configJsonPath);
+                perf.mark(`attempt ${attempt}: engine launched`);
+
+                asegurarOperacionConexionActiva(operationId);
+
+                if (configEnMemoria.connectionMode === 'proxy') {
+                    await esperarPuerto('127.0.0.1', puertoStealthLocal, 8000);
+                    borrarConfigTemporal();
+                    perf.mark(`attempt ${attempt}: local proxy ready`);
+
+                    asegurarOperacionConexionActiva(operationId);
+                    await activarProxySistema();
+                    perf.mark(`attempt ${attempt}: system proxy enabled`);
+                } else {
+                    const interfazLista = await esperarInterfazTun('ArrowTUN', 30000);
+                    if (!interfazLista) throw new Error('El adaptador TUN no apareció a tiempo.');
+                    borrarConfigTemporal();
+                    perf.mark(`attempt ${attempt}: TUN ready`);
+
+                    asegurarOperacionConexionActiva(operationId);
+                    if (configEnMemoria.killSwitch) await permitirTunKillSwitch();
+                    await aplicarConfiguracionTun(ipv6Activo);
+                    perf.mark(`attempt ${attempt}: TUN configured (${ipv6Activo ? 'IPv4+IPv6' : 'IPv4'})`);
+
+                    asegurarOperacionConexionActiva(operationId);
+                }
+
+                // CONNECTED depende del motor y del TUN/proxy local, no de una
+                // URL externa. La verificación de Internet ocurre después y
+                // nunca desmonta una sesión funcional por un falso negativo.
+                asegurarOperacionConexionActiva(operationId);
+                isVpnConnected = true;
+                connectionHealthState = 'VERIFYING';
+                setNetworkState('CONNECTED', 'connection-ready');
+                iniciarMonitorSingbox();
+                perf.done();
+                event.reply('vpn-conectada-exito');
+                void verificarSaludTunelEnSegundoPlano(operationId);
+                return;
+            } catch (attemptError) {
+                lastError = attemptError;
+                isVpnConnected = false;
+                const attemptMessage = String(attemptError?.message || attemptError || '');
+                const cancelled = attemptMessage.includes('connection_cancelled')
+                    || operationId !== connectionOperationId
+                    || networkState === 'DISCONNECTING';
+
+                if (cancelled) throw new Error('connection_cancelled');
+
+                const detalleIntento = [
+                    `Intento ${attempt}/${MAX_CONNECT_ATTEMPTS}: ${attemptMessage}`,
+                    singboxStdErr.trim(),
+                    singboxStdOut.trim(),
+                    leerLogSingbox()
+                ].filter(Boolean).join('\n');
+                registrarErrorApp('conectar-vpn-retry', detalleIntento);
+
+                const retryable = esErrorConexionReintentable(detalleIntento);
+                const hasMoreAttempts = attempt < MAX_CONNECT_ATTEMPTS;
+                borrarConfigTemporal();
+
+                if (!retryable || !hasMoreAttempts) throw attemptError;
+
+                if (serverId) reachabilityCache.delete(serverId);
+                const preserveKillSwitch = Boolean(configEnMemoria.killSwitch);
+                await restaurarRedWindows('connection-retry', { preserveKillSwitch });
+                asegurarOperacionConexionActiva(operationId);
+
+                // Con Kill Switch activo conservamos la IP ya resuelta para no
+                // abrir una ventana de DNS fuera del túnel entre reintentos.
+                if (!preserveKillSwitch) nodeIP = null;
+
+                setNetworkState('CONNECTING', `retry-wait-${attempt + 1}`);
+                desconexionManual = false;
+                event.reply('vpn-conexion-reintento', {
+                    attempt,
+                    nextAttempt: attempt + 1,
+                    maxAttempts: MAX_CONNECT_ATTEMPTS
+                });
+
+                const delayMs = CONNECT_RETRY_DELAYS_MS[attempt] || CONNECT_RETRY_DELAYS_MS.at(-1) || 1500;
+                await esperarReintentoCancelable(operationId, delayMs);
+            }
         }
 
-        await iniciarSingbox(configJsonPath);
-        perf.mark('engine launched');
-
-        if (networkState !== 'CONNECTING') throw new Error('connection_cancelled');
-
-        if (configEnMemoria.connectionMode === 'proxy') {
-            await esperarPuerto('127.0.0.1', puertoStealthLocal, 8000);
-            borrarConfigTemporal();
-            perf.mark('local proxy ready');
-
-            if (networkState !== 'CONNECTING') throw new Error('connection_cancelled');
-            await activarProxySistema();
-            perf.mark('system proxy enabled');
-        } else {
-            const interfazLista = await esperarInterfazTun('ArrowTUN', 30000);
-            if (!interfazLista) throw new Error('El adaptador TUN no apareció a tiempo.');
-            borrarConfigTemporal();
-            perf.mark('TUN ready');
-
-            if (networkState !== 'CONNECTING') throw new Error('connection_cancelled');
-            if (configEnMemoria.killSwitch) await permitirTunKillSwitch();
-            await aplicarConfiguracionTun();
-            perf.mark('TUN configured');
-
-            if (networkState !== 'CONNECTING') throw new Error('connection_cancelled');
-        }
-
-        await probarSaludTunel();
-        perf.mark('health check passed');
-
-        if (networkState !== 'CONNECTING') throw new Error('connection_cancelled');
-
-        isVpnConnected = true;
-        setNetworkState('CONNECTED', 'connection-ready');
-        iniciarMonitorSingbox();
-        perf.done();
-        event.reply('vpn-conectada-exito');
+        throw lastError || new Error('connection_attempts_exhausted');
     } catch (e) {
         isVpnConnected = false;
+        connectionHealthState = 'UNKNOWN';
         if (serverId) reachabilityCache.delete(serverId);
-        const cancelled = String(e?.message || '').includes('connection_cancelled');
+        const cancelled = String(e?.message || '').includes('connection_cancelled')
+            || operationId !== connectionOperationId;
         borrarConfigTemporal();
         await restaurarRedWindows(cancelled ? 'connection-cancelled' : 'connection-failed');
         perf.done(cancelled ? 'cancelled' : 'failed');
 
         const detalle = [e?.message, singboxStdErr.trim(), singboxStdOut.trim(), leerLogSingbox()].filter(Boolean).join('\n');
         registrarErrorApp('conectar-vpn', detalle);
-        if (!cancelled) event.reply('error-suscripcion', resumirErrorParaUI(detalle, configEnMemoria.connectionMode));
+        if (!cancelled) {
+            const retriesExhausted = attemptsPerformed >= MAX_CONNECT_ATTEMPTS && esErrorConexionReintentable(detalle);
+            if (retriesExhausted) {
+                event.reply('error-suscripcion', { message: t('err-retries-exhausted'), forceCard: true });
+            } else {
+                event.reply('error-suscripcion', resumirErrorParaUI(detalle, configEnMemoria.connectionMode));
+            }
+        }
     }
 });
 
 trustedIpcOn('desconectar-vpn', async (event) => {
-    if (networkState === 'DISCONNECTED') {
+    // Invalida inmediatamente cualquier secuencia CONNECTING/retry en curso.
+    connectionOperationId += 1;
+
+    if (networkState === 'DISCONNECTED' && !necesitaLimpiezaActiva()) {
         event.reply('vpn-desconectada-exito');
         return;
     }
@@ -2203,10 +2581,16 @@ trustedIpcOn('desconectar-vpn', async (event) => {
     const perf = crearTrazaRendimiento('disconnect');
     desconexionManual = true;
     isVpnConnected = false;
+    connectionHealthState = 'UNKNOWN';
     setNetworkState('DISCONNECTING', 'user-disconnect');
 
     try {
         await restaurarRedWindows('user-disconnect');
+        // Si coincidimos con una limpieza de retry que preservaba Kill Switch,
+        // hacemos una segunda pasada completa antes de confirmar desconexión.
+        if (necesitaLimpiezaActiva()) {
+            await restaurarRedWindows('user-disconnect-final');
+        }
     } catch (e) {
         registrarErrorApp('disconnect-cleanup', e.stack || e.message || String(e));
     } finally {
@@ -2300,10 +2684,14 @@ trustedIpcOn('get-settings', (event) => { event.reply('load-settings', settingsP
 
 trustedIpcOn('save-settings', async (_event, data) => {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-    const allowed = ['tray', 'autoConnect', 'killSwitch', 'connectionMode', 'idioma'];
+    const allowed = ['tray', 'autoConnect', 'killSwitch', 'ipv6Auto', 'connectionMode', 'idioma'];
     const idiomaAnterior = configEnMemoria.idioma;
     const killAnterior = configEnMemoria.killSwitch;
     for (const key of allowed) {
+        // IPv6 define la topología del TUN (direcciones, DNS y rutas).
+        // Nunca se cambia en caliente: la siguiente conexión vuelve a
+        // negociar la capacidad IPv6 del nodo desde un estado limpio.
+        if (key === 'ipv6Auto' && networkState !== 'DISCONNECTED') continue;
         if (Object.hasOwn(data, key)) configEnMemoria[key] = data[key];
     }
     try { persistirSettings({ persistServers: false }); }
@@ -2447,7 +2835,7 @@ trustedIpcOn('ota-download', async () => {
     }
     ota_downloadInProgress = true;
     try {
-        await autoUpdater.downloadUpdate();
+        await descargarActualizacionConFailover();
     } catch (err) {
         ota_downloadInProgress = false;
         if (mainWindow) mainWindow.webContents.send('ota:error', { message: err.message });
@@ -2501,6 +2889,7 @@ app.whenReady().then(async () => {
     try { persistirSettings(); } catch (e) { registrarErrorApp('startup-secure-store', e.message || String(e)); }
     asegurarIdiomaInicial();
     try { if (fs.existsSync(configJsonPath)) fs.unlinkSync(configJsonPath); } catch (_) {}
+    try { if (fs.existsSync(ipv6ProbeConfigPath)) fs.unlinkSync(ipv6ProbeConfigPath); } catch (_) {}
     limpiarAccesosDirectosFantasma();
 
     // Fast startup: solo ejecutamos recuperación pesada si existen marcadores de

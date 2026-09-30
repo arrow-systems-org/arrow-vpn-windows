@@ -1,6 +1,6 @@
 {
   "name": "arrow-vpn",
-  "version": "3.1.3",
+  "version": "3.1.4",
   "description": "Privacy-focused multi-provider VPN client for Windows powered by sing-box-lx",
   "main": "main.js",
   "type": "module",

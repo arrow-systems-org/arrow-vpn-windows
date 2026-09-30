@@ -1,4 +1,4 @@
-Arrow VPN 3.1.2 — sing-box-lx runtime
+Arrow VPN 3.1.4 — sing-box-lx runtime
 ======================================
 
 This working tree preserves the sing-box-lx runtime supplied by the project owner.

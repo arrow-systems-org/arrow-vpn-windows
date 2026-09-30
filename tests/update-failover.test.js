@@ -30,5 +30,12 @@ test('OTA checks and downloads with automatic mirror failover', () => {
   assert.match(main, /autoUpdater\.setFeedURL/);
   assert.match(main, /mirror desincronizado/);
   assert.match(main, /await autoUpdater\.downloadUpdate\(\)/);
-  assert.doesNotMatch(main, /log\.info\(`\[OTA\] descargando[^\n]+\n\s*await descargarActualizacionConFailover\(\)/);
+});
+
+test('manual OTA download IPC uses mirror failover instead of a direct provider download', () => {
+  const main = read('main.js');
+  const handler = main.match(/trustedIpcOn\('ota-download',[\s\S]*?\n}\);/);
+  assert.ok(handler, 'ota-download handler should exist');
+  assert.match(handler[0], /await descargarActualizacionConFailover\(\)/);
+  assert.doesNotMatch(handler[0], /await autoUpdater\.downloadUpdate\(\)/);
 });

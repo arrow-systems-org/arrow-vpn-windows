@@ -40,11 +40,14 @@ test('kill switch creates allow rules and blocks default outbound traffic', () =
   assert.match(main, /firewall_snapshot\.json/);
 });
 
-test('selected-node connection performs an end-to-end health check', () => {
+test('selected-node connection verifies Internet in background without gating the tunnel', () => {
   const main = read('main.js');
   assert.match(main, /async function probarSaludTunel/);
-  assert.match(main, /health_check_failed/);
-  assert.match(main, /await probarSaludTunel\(\)/);
+  assert.match(main, /async function verificarSaludTunelEnSegundoPlano/);
+  assert.match(main, /setNetworkState\('CONNECTED', 'connection-ready'\)/);
+  assert.match(main, /void verificarSaludTunelEnSegundoPlano\(operationId\)/);
+  const connectHandler = main.match(/trustedIpcOn\('conectar-vpn',[\s\S]*?trustedIpcOn\('desconectar-vpn'/u)?.[0] || '';
+  assert.doesNotMatch(connectHandler, /await probarSaludTunel\(\);/);
 });
 
 test('renderer does not receive or submit raw node URIs', () => {
@@ -64,4 +67,26 @@ test('subscription fetches cannot downgrade to HTTP and are size capped', () => 
 test('sing-box traffic log defaults to warnings instead of per-connection info', () => {
   const main = read('main.js');
   assert.match(main, /log: \{ level: 'warn', output: singboxLogPath \}/);
+});
+
+
+test('IPv6 is opt-in and negotiated per node instead of being forced globally', () => {
+  const main = read('main.js');
+  const renderer = read('renderer.js');
+  const html = read('index.html');
+  assert.match(main, /ipv6Auto: false/);
+  assert.match(main, /async function detectarSoporteIPv6Nodo/);
+  assert.match(main, /function probarIPv6ViaSocks5/);
+  assert.match(main, /tls\.connect/);
+  assert.match(main, /secureConnect/);
+  assert.match(main, /replyLength = 22/);
+  assert.match(main, /rejectUnauthorized: true/);
+  assert.match(main, /cloudflare-dns\.com/);
+  assert.match(main, /Remove-NetIPAddress/);
+  assert.match(main, /IPV6_CAPABILITY_CACHE_TTL_MS/);
+  assert.match(main, /address: ipv6Activo/);
+  assert.match(main, /strategy: ipv6Activo \? 'prefer_ipv4' : 'ipv4_only'/);
+  assert.match(main, /await aplicarConfiguracionTun\(ipv6Activo\)/);
+  assert.match(renderer, /toggle-ipv6-auto/);
+  assert.match(html, /id="toggle-ipv6-auto"/);
 });
