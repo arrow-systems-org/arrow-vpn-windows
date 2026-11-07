@@ -3,6 +3,7 @@
 # ========================
 node_modules/
 dist/
+/build/*
 !/build/installer.nsh
 out/
 release/
@@ -58,3 +59,8 @@ latest.yml
 *.tmp
 *.bak
 *.old
+
+# ========================
+# Mirror setup (Linux)
+# ========================
+/mirror-setup/

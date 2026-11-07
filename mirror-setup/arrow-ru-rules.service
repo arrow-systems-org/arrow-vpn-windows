@@ -1,8 +1,0 @@
-[Unit]
-Description=Refresh Arrow VPN RU sing-box rule-sets
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/arrow-update-ru-rule-sets /srv/arrow-updates/rulesets/ru
