@@ -445,6 +445,73 @@ body {
 .support-label { font-size: 11px; color: #7f8c8d; margin-bottom: 4px; }
 .support-value { font-size: 13px; font-weight: 700; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
+/* Arrow VPN 3.1.6: botón contextual junto a la versión. */
+.support-version-item { cursor: default; }
+.support-version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 9px;
+    min-width: 0;
+}
+.support-version-values {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+#app-version-text { color: #95a5a6; flex: 0 0 auto; }
+.support-version-arrow, .support-version-new { display: none; font-size: 12px; }
+.support-version-arrow { color: #95a5a6; }
+.support-version-new { color: #2ecc71; font-weight: 700; }
+.support-version-item.has-update #app-version-text {
+    text-decoration: line-through;
+    text-decoration-thickness: 1.4px;
+    opacity: 0.68;
+}
+.support-version-item.has-update .support-version-arrow,
+.support-version-item.has-update .support-version-new { display: inline; }
+.support-update-btn {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(52, 152, 219, 0.35);
+    background: rgba(52, 152, 219, 0.17);
+    color: #3daafb;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+    -webkit-app-region: no-drag;
+}
+.support-update-btn:hover:not(:disabled) {
+    background: rgba(52, 152, 219, 0.31);
+    transform: translateY(-1px);
+}
+.support-update-btn:focus-visible {
+    outline: 2px solid #72c5ff;
+    outline-offset: 2px;
+}
+.support-update-btn.has-update {
+    color: #37d683;
+    background: rgba(46, 204, 113, 0.17);
+    border-color: rgba(46, 204, 113, 0.43);
+}
+.support-update-btn.has-update:hover:not(:disabled) { background: rgba(46, 204, 113, 0.31); }
+.support-update-btn:disabled { cursor: wait; opacity: 0.75; }
+.support-update-btn .support-update-download { display: none; }
+.support-update-btn.has-update .support-update-refresh { display: none; }
+.support-update-btn.has-update .support-update-download { display: block; }
+.support-update-btn.is-checking .support-update-refresh { animation: support-update-spin 900ms linear infinite; }
+@keyframes support-update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .support-update-btn.is-checking .support-update-refresh { animation: none; }
+}
+
 /* --- ELEMENTOS DEL PANEL DE CUENTA --- */
 .input-llave {
     width: 100%;

@@ -8,11 +8,19 @@
 
 ## Arrow VPN
 
+**Current source version: 3.1.6.** The GitHub release badge above shows the most recently **published** release and may lag behind the source until the new release is uploaded. See [3.1.6 release notes](./RELEASE-NOTES-3.1.6.md) and [CHANGELOG.md](./CHANGELOG.md).
+
 Arrow VPN is a privacy-focused Windows VPN client. Arrow VPN subscriptions are first-class, but the client is intentionally **not locked to Arrow as a provider**: compatible third-party subscriptions and individual share links can be imported without an Arrow account or a central Arrow authentication service.
 
 The app parses subscription data locally, keeps node credentials in the Electron main process, and stores subscription/node secrets encrypted at rest with Windows DPAPI through Electron `safeStorage`.
 
 ## Features
+
+- **OTA update controls (3.1.6):** manual check in **Technical Support → App Version**, blue refresh icon while no update is pending, green download icon with old → new version display when a new version is available. The existing download/progress/restart-to-install flow remains in use.
+- **Update behavior:** choosing **Later** leaves the update available through the support panel and suppresses repeat prompts for that version only until the app process exits. A complete quit and subsequent launch checks and prompts again if necessary.
+- **Resilient OTA mirrors:** version-first discovery across four parallel `latest.yml` lookups (Arrow international/RU, GitHub Releases, emergency mirror); the validated download may fall back to another mirror serving the same release.
+- **Windows tray:** hovering over the tray icon displays **Arrow VPN**.
+- **Session messenger terminology:** the brand **Session** stays unchanged in Spanish, English and Russian labels.
 
 - **Enrutamiento inteligente (RU Direct)**: optional direct routing for Russian services (explicit domain exceptions, `geosite-category-ru.srs` and `geoip-ru.srs`) using official GitHub first, then Arrow VPN mirrors. See [SMART_ROUTING_README.md](./SMART_ROUTING_README.md).
 
@@ -25,7 +33,7 @@ The app parses subscription data locally, keeps node credentials in the Electron
 - **Kill Switch** with restoration of the user's previous Windows firewall policy.
 - IPv4 + IPv6 TUN support.
 - `strict_route` enabled in TUN mode to reduce DNS/routing leaks on Windows.
-- Real connection health check before the UI reports a successful connection.
+- Non-blocking Internet health verification after the VPN engine and local proxy/TUN report readiness; a failed external HTTP probe does not automatically tear down a functioning tunnel.
 - Automatic recovery when the core exits unexpectedly.
 - Local server reachability radar without exposing node credentials to the renderer.
 - English, Spanish and Russian UI.
@@ -56,6 +64,12 @@ The lx.4 release is particularly relevant to REALITY compatibility with Xray 26.
 Arrow Client does not require a central Arrow login. A subscription is treated as a local source of node definitions. External subscription URLs are requested directly by the client; they are not sent to an Arrow conversion/authentication endpoint.
 
 Secrets are kept out of the renderer process. The renderer receives sanitized server metadata only. The encrypted subscription URL and encrypted node map are stored through Windows DPAPI. Runtime sing-box logging defaults to `warn` to avoid creating a local per-connection browsing-style log.
+
+## Updating Arrow VPN
+
+The OTA system checks at launch (after the window opens) and periodically thereafter. The user can check manually through **Technical Support → App Version**, or use the green download control when an update is pending. After downloading, choose **Restart & install**. Selecting **Later** does **not** permanently dismiss a release; completely quitting and relaunching the app shows the prompt again if a newer version is still published.
+
+The application checks for an updated `latest.yml` over HTTPS from the international Arrow mirror, Russian Arrow mirror, GitHub Releases and emergency mirror. To publish a new Windows release, upload the NSIS `.exe`, associated `.blockmap` and its matching generated `latest.yml` with a versioned tag, then synchronize any external mirrors. Do not edit the checksum in `latest.yml` by hand.
 
 ## Development
 
@@ -90,7 +104,7 @@ Output is written to `dist/`.
 ## Important implementation notes
 
 - The application still runs elevated because TUN, routes, NRPT and firewall management require administrative access in the current architecture. Moving those operations into a small privileged helper/service remains a future hardening task and should be tested on real Windows systems before deployment.
-- The server radar reports reachability, not a full protocol handshake. A full end-to-end HTTP health check is performed during an actual connection before the UI reports success.
+- The server radar reports reachability, not a full protocol handshake. External HTTP verification runs asynchronously after connection readiness, and failures are logged without automatically disconnecting the VPN.
 - `geoip.dat` / `geosite.dat` are not required by the current generated configuration and are intentionally not part of the lx-ready source package.
 
 ## License

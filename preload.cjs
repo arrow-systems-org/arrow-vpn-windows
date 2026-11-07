@@ -39,6 +39,8 @@ const RECEIVE_CHANNELS = new Set([
   'suscripcion-copiada',
   'nodo-copiado',
   'ota:available',
+  'ota:checking',
+  'ota:check-result',
   'ota:not-available',
   'ota:error',
   'ota:progress',

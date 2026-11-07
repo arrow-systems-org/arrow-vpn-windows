@@ -21,7 +21,15 @@
 
             "panel-soporte-tit": "Soporte Técnico",
             "lbl-version": "Versión de App",
-            "lbl-sesion": "ID de Sesión",
+            "ota-check-btn": "Buscar actualizaciones",
+            "ota-checking-btn": "Buscando actualizaciones…",
+            "ota-download-btn": "Descargar actualización",
+            "ota-downloading-btn": "Ver descarga",
+            "ota-install-btn": "Instalar actualización",
+            "ota-no-update": "Ya tienes la última versión de Arrow VPN.",
+            "ota-check-failed": "No se pudo comprobar si hay actualizaciones.",
+            "ota-ready-toast": "Actualización descargada. Lista para instalar.",
+            "lbl-sesion": "ID de Session",
             "lbl-centro": "Centro de Ayuda",
             "btn-cerrar": "Cerrar",
 
@@ -121,6 +129,14 @@
 
             "panel-soporte-tit": "Technical Support",
             "lbl-version": "App Version",
+            "ota-check-btn": "Check for updates",
+            "ota-checking-btn": "Checking for updates…",
+            "ota-download-btn": "Download update",
+            "ota-downloading-btn": "View download",
+            "ota-install-btn": "Install update",
+            "ota-no-update": "You already have the latest version of Arrow VPN.",
+            "ota-check-failed": "Could not check for updates.",
+            "ota-ready-toast": "Update downloaded. Ready to install.",
             "lbl-sesion": "Session ID",
             "lbl-centro": "Help Center",
             "btn-cerrar": "Close",
@@ -221,7 +237,15 @@
 
             "panel-soporte-tit": "Техническая поддержка",
             "lbl-version": "Версия приложения",
-            "lbl-sesion": "ID Session Messenger",
+            "ota-check-btn": "Проверить обновления",
+            "ota-checking-btn": "Поиск обновлений…",
+            "ota-download-btn": "Скачать обновление",
+            "ota-downloading-btn": "Показать загрузку",
+            "ota-install-btn": "Установить обновление",
+            "ota-no-update": "У вас уже установлена последняя версия Arrow VPN.",
+            "ota-check-failed": "Не удалось проверить наличие обновлений.",
+            "ota-ready-toast": "Обновление загружено и готово к установке.",
+            "lbl-sesion": "ID Session",
             "lbl-centro": "Центр помощи",
             "btn-cerrar": "Закрыть",
 
@@ -417,6 +441,7 @@
         // Repintar la tarjeta de suscripción con el idioma nuevo
         actualizarInfoSuscripcion(expiraSubUI, traficoSubUI);
         actualizarDisponibilidadIpv6Switch();
+        window.dispatchEvent(new Event('arrow:language-changed'));
     }
 
     let estaConectado = false;
@@ -995,7 +1020,8 @@
     window.arrow.send('get-app-version');
 
     window.arrow.on('app-version', (version) => {
-        document.getElementById('app-version-text').innerText = "v" + version;
+        document.getElementById('app-version-text').textContent = 'v' + version;
+        window.dispatchEvent(new CustomEvent('arrow:app-version', { detail: version }));
     });
 
     window.arrow.on('update-status', (msg) => {
@@ -1391,6 +1417,76 @@
 
         // Estados: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'
         let otaState = 'idle';
+        let otaDismissedVersion = null; // Solo esta sesión; tras reiniciar vuelve el aviso.
+        let otaKnownVersion = null;
+        let otaCurrentVersion = null;
+        let otaChecking = false;
+        let otaManualCheckPending = false;
+        const versionItem = document.getElementById('support-version-item');
+        const versionText = document.getElementById('app-version-text');
+        const versionNew = document.getElementById('support-latest-version');
+        const updateBtn = document.getElementById('support-update-btn');
+
+        function otaUpdateSupport() {
+            if (!versionItem || !versionText || !versionNew || !updateBtn) return;
+            const available = Boolean(otaKnownVersion);
+            if (otaCurrentVersion) versionText.textContent = 'v' + otaCurrentVersion;
+            versionNew.textContent = available ? 'v' + otaKnownVersion : '';
+            versionItem.classList.toggle('has-update', available);
+            updateBtn.classList.toggle('has-update', available);
+            updateBtn.classList.toggle('is-checking', otaChecking && !available);
+            updateBtn.disabled = otaChecking && !available;
+            const key = otaState === 'downloaded' ? 'ota-install-btn'
+                : otaState === 'downloading' ? 'ota-downloading-btn'
+                : available ? 'ota-download-btn'
+                : otaChecking ? 'ota-checking-btn' : 'ota-check-btn';
+            const label = t(key);
+            updateBtn.title = label;
+            updateBtn.setAttribute('aria-label', label);
+        }
+
+        function otaStartDownload() {
+            if (otaState !== 'available') return;
+            otaDismissedVersion = null;
+            otaState = 'downloading';
+            otaRenderState();
+            elProgressFill.style.width = '0%';
+            elProgressPercent.textContent = '0%';
+            otaShowModal();
+            otaUpdateSupport();
+            window.arrow.send('ota-download');
+        }
+
+        if (updateBtn) {
+            updateBtn.addEventListener('click', () => {
+                if (otaState === 'available' || (otaState === 'error' && otaKnownVersion)) {
+                    if (otaState === 'error') otaState = 'available';
+                    otaStartDownload();
+                } else if (otaState === 'downloading' || otaState === 'downloaded') {
+                    otaRenderState();
+                    otaShowModal();
+                } else if (!otaChecking) {
+                    otaManualCheckPending = true;
+                    otaChecking = true;
+                    otaUpdateSupport();
+                    window.arrow.send('ota-check');
+                }
+            });
+        }
+        window.addEventListener('arrow:app-version', (e) => {
+            otaCurrentVersion = String(e.detail || '');
+            otaUpdateSupport();
+        });
+        window.addEventListener('arrow:language-changed', () => {
+            otaUpdateSupport();
+            if (modal.classList.contains('visible')) otaRenderState();
+        });
+        // Si app-version se recibió antes de registrar el controlador OTA,
+        // el valor ya está pintado en el panel de soporte.
+        const cachedVersion = versionText?.textContent?.trim() || '';
+        if (/^v\d+\.\d+\.\d+/.test(cachedVersion)) otaCurrentVersion = cachedVersion.slice(1);
+        otaUpdateSupport();
+        window.arrow.send('get-app-version');
 
         const otaLabels = {
             es: {
@@ -1457,6 +1553,7 @@
             elError.classList.remove('visible');
 
             if (otaState === 'available') {
+                btnAction.style.display = 'block';
                 elTitle.textContent = otaT('title-available');
                 elMessage.textContent = otaT('msg-available');
                 elMessage.style.display = 'block';
@@ -1497,12 +1594,34 @@
         }
 
         // ---- eventos IPC ----
+        window.arrow.on('ota:checking', (payload = {}) => {
+            otaChecking = Boolean(payload.checking);
+            otaUpdateSupport();
+        });
+
+        window.arrow.on('ota:check-result', (payload = {}) => {
+            otaManualCheckPending = false;
+            otaChecking = false;
+            otaUpdateSupport();
+            if (payload.manual && (payload.result === 'downloaded' || payload.result === 'downloading')) {
+                otaRenderState();
+                otaShowModal();
+            }
+        });
+
         window.arrow.on('ota:available', (info) => {
-            otaState = 'available';
-            elCurrentVer.textContent = 'v' + (info.currentVersion || '?');
-            elNewVer.textContent = 'v' + (info.version || '?');
+            if (!info || !info.version) return;
+            otaKnownVersion = String(info.version);
+            otaCurrentVersion = String(info.currentVersion || otaCurrentVersion || '?');
+            otaChecking = false;
+            otaManualCheckPending = false;
+            // Un refresco periódico no debe reiniciar una descarga en curso.
+            if (otaState !== 'downloading' && otaState !== 'downloaded') otaState = 'available';
+            elCurrentVer.textContent = 'v' + otaCurrentVersion;
+            elNewVer.textContent = 'v' + otaKnownVersion;
+            otaUpdateSupport();
             otaRenderState();
-            otaShowModal();
+            if (otaDismissedVersion !== otaKnownVersion) otaShowModal();
         });
 
         window.arrow.on('ota:progress', (progress) => {
@@ -1514,33 +1633,42 @@
         window.arrow.on('ota:downloaded', (info) => {
             otaState = 'downloaded';
             if (info && info.version) {
+                otaKnownVersion = String(info.version);
                 elNewVer.textContent = 'v' + info.version;
             }
             otaRenderState();
-            otaShowModal();
+            otaUpdateSupport();
+            if (otaDismissedVersion !== otaKnownVersion) otaShowModal();
+            else mostrarMensaje(t('ota-ready-toast'));
         });
 
         window.arrow.on('ota:error', (err) => {
-            // Solo mostrar el error si el modal ya estaba visible (para no molestar
-            // al user en errores silenciosos del chequeo periódico)
+            const manual = otaManualCheckPending || Boolean(err?.manual);
+            otaManualCheckPending = false;
+            otaChecking = false;
+            // Una descarga fallida puede reintentarse desde el botón verde.
+            if (otaState === 'downloading') otaState = 'available';
+            otaUpdateSupport();
+            if (manual) mostrarMensaje(t('ota-check-failed'), true);
+            // Errores automáticos silenciosos si el modal ya estaba cerrado.
             if (!modal.classList.contains('visible')) return;
             otaState = 'error';
             elError.textContent = (err && err.message) || 'Unknown error';
             otaRenderState();
         });
 
-        window.arrow.on('ota:not-available', () => {
-            // Silencioso: no molestamos al user si no hay update
+        window.arrow.on('ota:not-available', (info = {}) => {
+            const manual = otaManualCheckPending || Boolean(info.manual);
+            otaManualCheckPending = false;
+            otaChecking = false;
+            otaUpdateSupport();
+            if (manual) mostrarMensaje(t('ota-no-update'));
         });
 
         // ---- eventos del user ----
         btnAction.addEventListener('click', () => {
             if (otaState === 'available') {
-                otaState = 'downloading';
-                otaRenderState();
-                elProgressFill.style.width = '0%';
-                elProgressPercent.textContent = '0%';
-                window.arrow.send('ota-download');
+                otaStartDownload();
             } else if (otaState === 'downloaded') {
                 btnAction.disabled = true;
                 btnLater.disabled = true;
@@ -1549,9 +1677,10 @@
         });
 
         btnLater.addEventListener('click', () => {
+            // Aplazar solo esta ejecución. Un arranque desde cero vuelve a
+            // detectar y mostrar la actualización si sigue disponible.
+            otaDismissedVersion = otaKnownVersion;
             otaHideModal();
-            // Nota: si estaba downloading, la descarga sigue en background.
-            // El siguiente chequeo (o el evento update-downloaded) volverá a mostrar
-            // el modal cuando corresponda.
+            otaUpdateSupport();
         });
     });

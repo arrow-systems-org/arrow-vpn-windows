@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, session, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, session, clipboard, net as electronNet } from 'electron';
 import Store from 'electron-store';
 import updaterPackage from 'electron-updater';
 import log from 'electron-log/main';
@@ -15,6 +15,7 @@ import * as protocols from './protocols.js';
 import * as flags from './flags.js';
 import { addRuDirectRouting } from './smart-routing.js';
 import { refreshRuRuleSets } from './rule-set-updater.js';
+import { lookupLatestInMirrors, compareReleaseVersions } from './ota-mirrors.js';
 
 const { autoUpdater } = updaterPackage;
 const __filename = fileURLToPath(import.meta.url);
@@ -81,6 +82,9 @@ let ota_downloaded = false;
 let ota_activeSourceIndex = 0;
 let ota_failoverActive = false;
 let ota_silentProviderRefresh = false;
+let ota_checkPromise = null;
+let ota_verifiedSources = []; // Mirrors ordenados por versión (más alta), luego rapidez.
+
 
 function configurarFuenteOta(index) {
     const safeIndex = Math.max(0, Math.min(index, OTA_UPDATE_SOURCES.length - 1));
@@ -100,57 +104,133 @@ function mensajeErrorOta(error) {
     return (error && error.message) ? error.message : String(error);
 }
 
-async function comprobarActualizacionConFailover(reason = 'manual', startIndex = 0) {
-    const errors = [];
-    ota_failoverActive = true;
+function otaEnviar(channel, payload) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(channel, payload);
+    }
+}
 
-    try {
-        for (let offset = 0; offset < OTA_UPDATE_SOURCES.length; offset += 1) {
-            const index = (startIndex + offset) % OTA_UPDATE_SOURCES.length;
-            const source = configurarFuenteOta(index);
+function otaNotificarDisponible(info, reason) {
+    const sameVersion = ota_updateInfo && ota_updateInfo.version === info.version;
+    ota_updateInfo = info;
+    if (!sameVersion) ota_downloaded = false;
+    otaEnviar('ota:available', {
+        version: info.version, releaseDate: info.releaseDate,
+        currentVersion: app.getVersion(),
+        source: OTA_UPDATE_SOURCES[ota_activeSourceIndex].id,
+        reason,
+    });
+}
 
-            try {
-                log.info(`[OTA] comprobando ${source.id}; reason=${reason}`);
-                const result = await autoUpdater.checkForUpdates();
-                log.info(`[OTA] ${source.id} respondió correctamente`);
-                return result;
-            } catch (error) {
-                const message = mensajeErrorOta(error);
-                errors.push(`${source.id}: ${message}`);
-                log.warn(`[OTA] fuente ${source.id} no disponible: ${message}`);
-            }
-        }
-    } finally {
-        ota_failoverActive = false;
+async function ejecutarComprobacionOta(reason) {
+    const manual = reason === 'ipc-manual';
+    // La metadata/configuración del proveedor no debe mutar durante una descarga.
+    if (ota_downloadInProgress || ota_downloaded) {
+        otaEnviar('ota:check-result', { result: ota_downloaded ? 'downloaded' : 'downloading', manual });
+        return { status: ota_downloaded ? 'downloaded' : 'downloading' };
     }
 
-    throw new Error(`No hay servidores de actualización disponibles. ${errors.join(' | ')}`);
+    otaEnviar('ota:checking', { checking: true, reason });
+    ota_failoverActive = true;
+    try {
+        const discovery = await lookupLatestInMirrors(OTA_UPDATE_SOURCES, { fetchImpl: (url, options) => electronNet.fetch(url, options), timeoutMs: 6000 });
+        ota_verifiedSources = discovery.candidates;
+        if (!discovery.candidates.length) {
+            throw new Error('No se pudo consultar latest.yml en ningún mirror');
+        }
+        const latest = discovery.candidates[0];
+        log.info(`[OTA] versión máxima: ${latest.version}; mirror más rápido de esta versión: ${latest.id}`);
+
+        const newer = discovery.candidates.filter(x => compareReleaseVersions(x.version, app.getVersion()) > 0);
+        if (!newer.length) {
+            // No borrar una actualización detectada anteriormente si los mirrors
+            // quedan desincronizados tras la primera detección.
+            if (ota_updateInfo && compareReleaseVersions(ota_updateInfo.version, app.getVersion()) > 0) {
+                otaNotificarDisponible(ota_updateInfo, reason);
+                return { status: 'available', version: ota_updateInfo.version };
+            }
+            otaEnviar('ota:not-available', { currentVersion: app.getVersion(), manual });
+            return { status: 'current' };
+        }
+
+        const errors = [];
+        ota_silentProviderRefresh = true; // No emitir estados transitorios de providers obsoletos.
+        for (const candidate of newer) {
+            configurarFuenteOta(candidate.index);
+            try {
+                log.info(`[OTA] comprobación con electron-updater desde ${candidate.id} (${candidate.version})`);
+                const result = await autoUpdater.checkForUpdates();
+                const info = result?.updateInfo;
+                if (!info?.version || compareReleaseVersions(info.version, app.getVersion()) <= 0) {
+                    throw new Error('Provider no confirmó una versión nueva');
+                }
+                if (compareReleaseVersions(info.version, candidate.version) !== 0) {
+                    throw new Error(`Mirror cambió su versión durante el chequeo (${info.version})`);
+                }
+                // Preservar una versión mayor ya confirmada ante un mirror rezagado.
+                if (ota_updateInfo && compareReleaseVersions(ota_updateInfo.version, info.version) > 0) {
+                    otaNotificarDisponible(ota_updateInfo, reason);
+                    return { status: 'available', version: ota_updateInfo.version };
+                }
+                otaNotificarDisponible(info, reason);
+                return { status: 'available', version: info.version };
+            } catch (error) {
+                errors.push(`${candidate.id}: ${mensajeErrorOta(error)}`);
+                log.warn(`[OTA] metadata ${candidate.id} falló: ${mensajeErrorOta(error)}`);
+            }
+        }
+        throw new Error(`Los mirrors anunciaron una nueva versión, pero el proveedor no pudo validarla. ${errors.join(' | ')}`);
+    } finally {
+        ota_silentProviderRefresh = false;
+        ota_failoverActive = false;
+        otaEnviar('ota:checking', { checking: false, reason });
+    }
+}
+
+async function comprobarActualizacionConFailover(reason = 'manual') {
+    // Un único chequeo en curso. Si llega un clic manual mientras se comprueba
+    // automáticamente, reutilizamos el trabajo y notificamos el resultado.
+    if (ota_checkPromise) {
+        const result = await ota_checkPromise;
+        if (reason === 'ipc-manual') {
+            if (result.status === 'current') otaEnviar('ota:not-available', { currentVersion: app.getVersion(), manual: true });
+            if (result.status === 'available') otaNotificarDisponible(ota_updateInfo, reason);
+        }
+        return result;
+    }
+    const task = ejecutarComprobacionOta(reason);
+    ota_checkPromise = task;
+    try { return await task; }
+    finally { if (ota_checkPromise === task) ota_checkPromise = null; }
 }
 
 async function descargarActualizacionConFailover() {
-    const expectedVersion = ota_updateInfo && ota_updateInfo.version;
-    const startIndex = ota_activeSourceIndex;
+    const expectedVersion = ota_updateInfo?.version;
+    if (!expectedVersion) throw new Error('No update info available');
+    // Para descargar se prefieren mirrors ya verificados con la versión correcta.
+    const verified = ota_verifiedSources
+        .filter(x => compareReleaseVersions(x.version, expectedVersion) === 0)
+        .map(x => x.index);
+    const indices = [...new Set([
+        ota_activeSourceIndex,
+        ...verified,
+        ...OTA_UPDATE_SOURCES.map((_source, index) => index),
+    ])];
     const errors = [];
-
     ota_failoverActive = true;
     try {
-        for (let offset = 0; offset < OTA_UPDATE_SOURCES.length; offset += 1) {
-            const index = (startIndex + offset) % OTA_UPDATE_SOURCES.length;
+        for (const [position, index] of indices.entries()) {
             const source = configurarFuenteOta(index);
-
             try {
-                // Si cambiamos de mirror, refrescamos metadata para que electron-updater
-                // asocie la descarga al provider correcto.
-                if (offset > 0) {
+                if (position > 0) {
                     ota_silentProviderRefresh = true;
                     const result = await autoUpdater.checkForUpdates();
-                    const mirrorVersion = result && result.updateInfo && result.updateInfo.version;
-                    if (expectedVersion && mirrorVersion !== expectedVersion) {
+                    const mirrorVersion = result?.updateInfo?.version;
+                    if (!mirrorVersion || compareReleaseVersions(mirrorVersion, expectedVersion) !== 0) {
                         throw new Error(`mirror desincronizado: esperaba ${expectedVersion}, recibió ${mirrorVersion || 'sin versión'}`);
                     }
                 }
-
-                log.info(`[OTA] descargando desde ${source.id}`);
+                log.info(`[OTA] descargando ${expectedVersion} desde ${source.id}`);
                 await autoUpdater.downloadUpdate();
                 return;
             } catch (error) {
@@ -165,12 +245,11 @@ async function descargarActualizacionConFailover() {
         ota_failoverActive = false;
         ota_silentProviderRefresh = false;
     }
-
     throw new Error(`No fue posible descargar la actualización desde ningún mirror. ${errors.join(' | ')}`);
 }
 
-// Dejamos la fuente primaria configurada desde el arranque; los fallbacks se
-// activan automáticamente sólo cuando la fuente anterior falla.
+// El proveedor de inicio queda listo para descargas; la comprobación compara
+// los cuatro mirrors en paralelo y prefiere la versión más reciente.
 configurarFuenteOta(0);
 
 const store = new Store({ name: 'arrow_credenciales' });
@@ -2745,6 +2824,7 @@ trustedIpcOn('copiar-nodo', (event, payload) => {
 
 function createTray() {
     tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 24 }));
+    tray.setToolTip('Arrow VPN'); // Nombre visible al pasar el cursor sobre la bandeja de Windows.
     aplicarMenuTray();
     tray.on('double-click', () => mainWindow.show());
 }
@@ -2763,31 +2843,14 @@ function aplicarMenuTray() {
 // ============================================================
 autoUpdater.on('checking-for-update', () => { console.log('[OTA] checking-for-update'); });
 
+// Los eventos transitorios de electron-updater no deben reemplazar el
+// resultado de la comprobación paralela: se anuncian al terminar de validar.
 autoUpdater.on('update-available', (info) => {
-    console.log('[OTA] update-available:', info.version);
-    ota_updateInfo = info;
-
-    if (ota_silentProviderRefresh) {
-        log.info(`[OTA] metadata refrescada silenciosamente para ${info.version}`);
-        return;
-    }
-
-    ota_downloaded = false;
-    ota_downloadInProgress = false;
-    if (mainWindow) {
-        mainWindow.webContents.send('ota:available', {
-            version: info.version,
-            releaseDate: info.releaseDate,
-            currentVersion: app.getVersion(),
-            source: OTA_UPDATE_SOURCES[ota_activeSourceIndex].id,
-        });
-    }
+    log.info(`[OTA] provider señaló disponible: ${info.version}`);
 });
 
-autoUpdater.on('update-not-available', (info) => {
-    console.log('[OTA] update-not-available. Cliente ya en la última versión.');
-    if (ota_silentProviderRefresh) return;
-    if (mainWindow) mainWindow.webContents.send('ota:not-available', { currentVersion: app.getVersion() });
+autoUpdater.on('update-not-available', () => {
+    log.info('[OTA] provider no detectó actualización (posible mirror rezagado)');
 });
 
 autoUpdater.on('download-progress', (progress) => {
@@ -2835,13 +2898,18 @@ trustedIpcOn('ota-check', async () => {
         await comprobarActualizacionConFailover('ipc-manual');
     } catch (err) {
         console.log('[OTA] checkForUpdates fallo:', err.message);
-        if (mainWindow) mainWindow.webContents.send('ota:error', { message: err.message });
+        otaEnviar('ota:error', { message: err.message, manual: true });
     }
 });
 
 trustedIpcOn('ota-download', async () => {
     console.log('[OTA] IPC ota-download');
-    if (ota_downloadInProgress) return;
+    if (ota_downloadInProgress || ota_downloaded) return;
+    // No cambiar el proveedor mientras se comprueba una nueva versión.
+    if (ota_checkPromise) {
+        try { await ota_checkPromise; }
+        catch (e) { otaEnviar('ota:error', { message: e.message || String(e) }); return; }
+    }
     if (!ota_updateInfo) {
         if (mainWindow) mainWindow.webContents.send('ota:error', { message: 'No update info available' });
         return;

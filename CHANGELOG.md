@@ -1,6 +1,18 @@
+## 3.1.6 — OTA update control, mirror selection and polish
+
+- Added a compact update button beside **App Version** in the Technical Support panel: blue refresh icon for manual checks, green download icon when a newer version is available, with a localized hover tooltip.
+- Show the installed version crossed out and an arrow to the available version when an update is found.
+- Choosing **Later** dismisses the update dialog only for the current app process: the green action remains accessible, and a fresh app launch checks again and re-shows the dialog if the update is still available. Merely hiding the window in the tray does not count as a full restart.
+- Preserve an available update through periodic checks; after download, let the user restart and install through the existing electron-updater flow.
+- Query the `latest.yml` metadata from the four OTA sources in parallel. Prefer the highest valid release version; for equal versions prefer the fastest responding source. Retain validated download failover for mirrors of the same version.
+- Add translated update button labels and statuses for Spanish, English and Russian.
+- Preserve the product name **Session** in the support label in all three languages (`ID de Session`, `Session ID`, `ID Session`), rather than translating it as a meeting.
+- Set the Windows tray icon tooltip to **Arrow VPN**, so it is no longer blank on hover.
+- Extend OTA/UI regression tests; no change to VPN profiles, credentials, REALITY keys, rule sets or the sing-box-lx binary.
+
 ## 3.1.5 — Smart routing (RU Direct)
 
-- New opt-in **Enrutamiento inteligente** setting for Windows TUN and local proxy.
+- New opt-in **Smart Routing** setting for Windows TUN and local proxy.
 - Matches Russian domains, Russian IPs and private networks to `direct`; other traffic remains on Arrow VPN.
 - Uses sing-box `.srs` rule sets (current format) and intercepts DNS in the VPN TUN.
 - Downloads rule sets on app launch: **official SagerNet GitHub first**, then three Arrow update mirrors, with verified cached fallback.

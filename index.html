@@ -106,13 +106,31 @@
             </div>
         </div>
 
-        <div class="support-item" style="cursor: default;">
+        <div class="support-item support-version-item" id="support-version-item">
             <span class="support-label" data-i18n="lbl-version">Versión de App</span>
-            <span class="support-value" id="app-version-text" style="color: #95a5a6;">Cargando...</span>
+            <div class="support-version-row">
+                <div class="support-version-values" aria-live="polite">
+                    <span class="support-value" id="app-version-text">Cargando...</span>
+                    <span class="support-version-arrow" aria-hidden="true">→</span>
+                    <span class="support-version-new" id="support-latest-version"></span>
+                </div>
+                <button id="support-update-btn" class="support-update-btn" type="button"
+                        data-i18n-title="ota-check-btn" title="Buscar actualizaciones"
+                        aria-label="Buscar actualizaciones">
+                    <svg class="support-update-refresh" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4"/>
+                        <path d="M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"/>
+                    </svg>
+                    <svg class="support-update-download" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3v12m-5-5 5 5 5-5"/>
+                        <path d="M5 18v3h14v-3"/>
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <div class="support-item" data-clipboard="05900ca5fcec8fe58b509961f5ed9c658a876c1308b9bfdd69e14effbd1ed13a0e">
-            <span class="support-label" data-i18n="lbl-sesion">ID de Sesión</span>
+            <span class="support-label" data-i18n="lbl-sesion">ID de Session</span>
             <span class="support-value" style="color: #7f8c8d;">05900ca5fcec8fe58b509961f5ed9c658a876c1308b9bfdd69e14effbd1ed13a0e</span>
         </div>
 
