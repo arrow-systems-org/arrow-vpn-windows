@@ -1,3 +1,11 @@
+## 3.1.5 — Smart routing (RU Direct)
+
+- New opt-in **Enrutamiento inteligente** setting for Windows TUN and local proxy.
+- Matches Russian domains, Russian IPs and private networks to `direct`; other traffic remains on Arrow VPN.
+- Uses sing-box `.srs` rule sets (current format) and intercepts DNS in the VPN TUN.
+- Downloads rule sets on app launch: **official SagerNet GitHub first**, then three Arrow update mirrors, with verified cached fallback.
+- Adds deployment templates for mirrors and unit tests. Existing sing-box-lx Windows binary is not upgraded by this change.
+
 # 3.1.4 — Non-blocking connection health verification
 
 - `CONNECTED` now means the VPN engine and TUN/local proxy are ready; external HTTP probes no longer gate the connection.

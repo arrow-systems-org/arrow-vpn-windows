@@ -14,6 +14,8 @@ The app parses subscription data locally, keeps node credentials in the Electron
 
 ## Features
 
+- **Enrutamiento inteligente (RU Direct)**: optional direct routing for Russian services (explicit domain exceptions, `geosite-category-ru.srs` and `geoip-ru.srs`) using official GitHub first, then Arrow VPN mirrors. See [SMART_ROUTING_README.md](./SMART_ROUTING_README.md).
+
 - **Provider-agnostic subscriptions**: Arrow VPN or compatible external providers.
 - **Single-node import** for supported share links.
 - Supported node schemes: **VLESS, Trojan, VMess, Shadowsocks, Hysteria2/Hy2 and TUIC**.

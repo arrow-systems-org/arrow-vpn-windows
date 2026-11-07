@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 import * as subscription from './subscription.js';
 import * as protocols from './protocols.js';
 import * as flags from './flags.js';
+import { addRuDirectRouting } from './smart-routing.js';
+import { refreshRuRuleSets } from './rule-set-updater.js';
 
 const { autoUpdater } = updaterPackage;
 const __filename = fileURLToPath(import.meta.url);
@@ -252,6 +254,7 @@ const configEnMemoriaInicial = {
     autoConnect: false,
     killSwitch: false,
     ipv6Auto: false,
+    smartRouting: false, // Opt-in RU Direct (Happ routing ported to sing-box rule-sets)
     connectionMode: 'vpn',
     // --- NUEVO MODELO: suscripción en vez de uuid/password ---
     subUrlCifrada: '',        // la URL cifrada con safeStorage
@@ -505,6 +508,7 @@ const rutaBinarios = app.isPackaged
 // APUNTAMOS AL NUEVO MOTOR: SING-BOX
 const singboxPath = path.join(rutaBinarios, 'sing-box.exe');
 const configJsonPath = path.join(app.getPath('userData'), 'config.json');
+const ruRulesDir = path.join(app.getPath('userData'), 'rule-sets');
 const ipv6ProbeConfigPath = path.join(app.getPath('userData'), 'ipv6_probe.json');
 const singboxLogPath = path.join(app.getPath('userData'), 'singbox_error.log');
 const appErrorLogPath = path.join(app.getPath('userData'), 'app_error.log');
@@ -592,6 +596,7 @@ function getSettings() {
         autoConnect: (saved.autoConnect === true || saved.autoConnect === 'true'),
         killSwitch: (saved.killSwitch === true || saved.killSwitch === 'true'),
         ipv6Auto: (saved.ipv6Auto === true || saved.ipv6Auto === 'true'),
+        smartRouting: (saved.smartRouting === true || saved.smartRouting === 'true'),
         connectionMode: saved.connectionMode || 'vpn',
         idioma: saved.idioma || null
     };
@@ -625,6 +630,7 @@ function settingsPublicos() {
         autoConnect: configEnMemoria.autoConnect,
         killSwitch: configEnMemoria.killSwitch,
         ipv6Auto: configEnMemoria.ipv6Auto,
+        smartRouting: configEnMemoria.smartRouting,
         connectionMode: configEnMemoria.connectionMode,
         idioma: configEnMemoria.idioma,
         servidores: servidoresPublicos()
@@ -652,6 +658,7 @@ function persistirSettings({ persistServers = true } = {}) {
         autoConnect: Boolean(configEnMemoria.autoConnect),
         killSwitch: Boolean(configEnMemoria.killSwitch),
         ipv6Auto: Boolean(configEnMemoria.ipv6Auto),
+        smartRouting: Boolean(configEnMemoria.smartRouting),
         connectionMode: configEnMemoria.connectionMode || 'vpn',
         idioma: configEnMemoria.idioma || 'en'
     };
@@ -2355,6 +2362,11 @@ function generarConfigSingbox(nodeUri, nodeIP, { ipv6Activo = false } = {}) {
             }
         };
 
+        if (configEnMemoria.smartRouting) {
+            const routing = addRuDirectRouting(config, { enabled: true, rulesDir: ruRulesDir });
+            console.log(`[RU Direct] Enabled; local rule-sets: ${routing.available.join(', ') || 'offline domain fallback'}`);
+        }
+
         if (configEnMemoria.connectionMode === 'proxy') {
             config.inbounds = [{ type: 'mixed', tag: 'mixed-in', listen: '127.0.0.1', listen_port: puertoStealthLocal }];
         } else {
@@ -2684,7 +2696,7 @@ trustedIpcOn('get-settings', (event) => { event.reply('load-settings', settingsP
 
 trustedIpcOn('save-settings', async (_event, data) => {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-    const allowed = ['tray', 'autoConnect', 'killSwitch', 'ipv6Auto', 'connectionMode', 'idioma'];
+    const allowed = ['tray', 'autoConnect', 'killSwitch', 'ipv6Auto', 'smartRouting', 'connectionMode', 'idioma'];
     const idiomaAnterior = configEnMemoria.idioma;
     const killAnterior = configEnMemoria.killSwitch;
     for (const key of allowed) {
@@ -2692,6 +2704,7 @@ trustedIpcOn('save-settings', async (_event, data) => {
         // Nunca se cambia en caliente: la siguiente conexión vuelve a
         // negociar la capacidad IPv6 del nodo desde un estado limpio.
         if (key === 'ipv6Auto' && networkState !== 'DISCONNECTED') continue;
+        if (key === 'smartRouting' && networkState !== 'DISCONNECTED') continue;
         if (Object.hasOwn(data, key)) configEnMemoria[key] = data[key];
     }
     try { persistirSettings({ persistServers: false }); }
@@ -2910,6 +2923,15 @@ app.whenReady().then(async () => {
 
     createWindow();
     createTray();
+
+    // RU rule-sets refresh on every launch, off the critical UI/VPN path.
+    // Mirror failover, last-known-good caching and explicit offline rules mean
+    // even an inaccessible mirror never prevents the user from connecting.
+    setTimeout(() => {
+        void refreshRuRuleSets(ruRulesDir)
+            .then(result => console.log('[RU Direct] rule-set refresh', result))
+            .catch(e => registrarErrorApp('ru-rules-refresh', e.message || String(e)));
+    }, 900);
 
     // Calentamos la validación del motor cuando la UI ya está creada. Así el primer
     // Connect normalmente reutiliza el resultado cacheado sin bloquear la interacción.

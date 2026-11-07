@@ -667,6 +667,13 @@ input:checked + .slider.killswitch-slider { background-color: #e74c3c; border-co
     cursor: not-allowed;
 }
 
+.setting-hint {
+    color: #8e9ba5;
+    font-size: 11px;
+    line-height: 1.45;
+    margin: 4px 8px 10px;
+}
+
 /* --- PANTALLA DE LOGIN --- */
 .pantalla-login {
     position: absolute; top: 35px; left: 0; width: 100%; height: calc(100% - 35px);

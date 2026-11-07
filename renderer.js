@@ -33,6 +33,8 @@
             "lbl-tray": "Minimizar a la bandeja",
             "lbl-auto": "Conexión automática",
             "lbl-ipv6-auto": "IPv6 automático",
+            "lbl-smart-routing": "Enrutamiento inteligente",
+            "smart-routing-hint": "Los servicios rusos usan conexión directa; el resto va por Arrow VPN. Reconecta para aplicar.",
             "ipv6-change-disabled": "Desconecta la VPN para cambiar IPv6",
             "lbl-sec": "Seguridad Avanzada",
             "lbl-kill": "Kill Switch (Bloqueo)",
@@ -131,6 +133,8 @@
             "lbl-tray": "Minimize to tray",
             "lbl-auto": "Auto-connect",
             "lbl-ipv6-auto": "Automatic IPv6",
+            "lbl-smart-routing": "Smart routing",
+            "smart-routing-hint": "Russian sites go directly; other traffic uses Arrow VPN. Reconnect to apply.",
             "ipv6-change-disabled": "Disconnect the VPN to change IPv6",
             "lbl-sec": "Advanced Security",
             "lbl-kill": "Kill Switch (Block)",
@@ -229,6 +233,8 @@
             "lbl-tray": "Сворачивать в трей",
             "lbl-auto": "Автоподключение",
             "lbl-ipv6-auto": "Автоматический IPv6",
+            "lbl-smart-routing": "Умная маршрутизация",
+            "smart-routing-hint": "Российские сайты — напрямую, остальное — через Arrow VPN. Переподключитесь для применения.",
             "ipv6-change-disabled": "Отключите VPN, чтобы изменить IPv6",
             "lbl-sec": "Расширенная безопасность",
             "lbl-kill": "Kill Switch (Блокировка)",
@@ -443,6 +449,8 @@
     const toggleTray = document.getElementById('toggle-tray');
     const toggleAuto = document.getElementById('toggle-auto');
     const toggleIpv6Auto = document.getElementById('toggle-ipv6-auto');
+    const toggleSmartRouting = document.getElementById('toggle-smart-routing');
+    const rowSmartRouting = document.getElementById('row-smart-routing');
     const rowIpv6Auto = document.getElementById('row-ipv6-auto');
     const toggleKillswitch = document.getElementById('toggle-killswitch');
     const toast = document.getElementById('toast-notificacion');
@@ -463,6 +471,9 @@
         toggleIpv6Auto.disabled = bloqueado;
         rowIpv6Auto.classList.toggle('setting-locked', bloqueado);
         rowIpv6Auto.title = bloqueado ? t('ipv6-change-disabled') : '';
+        toggleSmartRouting.disabled = bloqueado;
+        rowSmartRouting.classList.toggle('setting-locked', bloqueado);
+        rowSmartRouting.title = bloqueado ? t('smart-routing-hint') : '';
     }
 
     actualizarDisponibilidadIpv6Switch();
@@ -558,6 +569,7 @@
             autoConnect: toggleAuto.checked,
             killSwitch: toggleKillswitch.checked,
             ipv6Auto: toggleIpv6Auto.checked,
+            smartRouting: toggleSmartRouting.checked,
             connectionMode: modoConexionActual,
             idioma: currentLangValue
         });
@@ -998,6 +1010,7 @@
         toggleTray.checked = settings.tray;
         toggleAuto.checked = settings.autoConnect;
         toggleIpv6Auto.checked = settings.ipv6Auto === true;
+        toggleSmartRouting.checked = settings.smartRouting === true;
         toggleKillswitch.checked = settings.killSwitch;
         actualizarDisponibilidadIpv6Switch();
 
@@ -1030,7 +1043,7 @@
         }
     });
 
-    [toggleTray, toggleAuto, toggleIpv6Auto, toggleKillswitch].forEach(toggle => {
+    [toggleTray, toggleAuto, toggleIpv6Auto, toggleSmartRouting, toggleKillswitch].forEach(toggle => {
         toggle.addEventListener('change', () => aplicarGuardado(true));
     });
 

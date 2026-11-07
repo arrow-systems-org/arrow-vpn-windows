@@ -1,6 +1,6 @@
 {
   "name": "arrow-vpn",
-  "version": "3.1.4",
+  "version": "3.1.5",
   "description": "Privacy-focused multi-provider VPN client for Windows powered by sing-box-lx",
   "main": "main.js",
   "type": "module",
@@ -33,7 +33,7 @@
   ],
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check subscription.js && node --check protocols.js && node --check flags.js && node --check renderer.js && node --check preload.cjs",
+    "check": "node --check main.js && node --check subscription.js && node --check protocols.js && node --check flags.js && node --check smart-routing.js && node --check rule-set-updater.js && node --check renderer.js && node --check preload.cjs",
     "test": "node --test tests/*.test.js",
     "build": "electron-builder --win",
     "dist": "electron-builder --win",
@@ -80,6 +80,8 @@
       "subscription.js",
       "protocols.js",
       "flags.js",
+      "smart-routing.js",
+      "rule-set-updater.js",
       "index.html",
       "style.css",
       "icon.png",
