@@ -43,14 +43,6 @@ Arrow currently accepts:
 
 Arrow does **not** currently parse arbitrary Clash YAML or arbitrary sing-box JSON subscription documents. Providers that offer a URI/base64 subscription format should work without Arrow-specific authentication.
 
-## Engine requirement
-
-Arrow 3.1.x requires **sing-box-lx 1.14.1-lx.4 or newer**. The app checks the core version and runs `sing-box check` on every generated configuration before starting it.
-
-This source package intentionally does not need to bundle a core. Put the Windows build in `bin/` as described in [`bin/README-SING-BOX-LX.txt`](./bin/README-SING-BOX-LX.txt).
-
-The lx.4 release is particularly relevant to REALITY compatibility with Xray 26.9.8/26.9.9 because it supports the hybrid `X25519MLKEM768` key share and applies `fragment` / `record_fragment` to REALITY.
-
 ## Privacy model
 
 Arrow Client does not require a central Arrow login. A subscription is treated as a local source of node definitions. External subscription URLs are requested directly by the client; they are not sent to an Arrow conversion/authentication endpoint.
