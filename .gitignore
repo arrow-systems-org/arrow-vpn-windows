@@ -11,9 +11,6 @@ release/
 # Logs
 # ========================
 *.log
-xray_error.log
-xray_access.log
-singbox_error.log
 
 # ========================
 # Runtime / config local
@@ -21,11 +18,14 @@ singbox_error.log
 config.json
 arrow_credenciales.json
 .env
+.env.*
+!.env.example
 
 # ========================
 # Scripts temporales
 # ========================
-*.ps1
+*.tmp.ps1
+*.temp.ps1
 
 # ========================
 # Binaries / builds
@@ -38,6 +38,7 @@ arrow_credenciales.json
 # ========================
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # ========================
 # IDEs / editors
@@ -56,3 +57,4 @@ latest.yml
 # ========================
 *.tmp
 *.bak
+*.old
