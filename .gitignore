@@ -3,7 +3,7 @@
 # ========================
 node_modules/
 dist/
-build/
+!/build/installer.nsh
 out/
 release/
 
